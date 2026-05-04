@@ -360,6 +360,14 @@ struct CameraSource *snout_camera_source(uintptr_t index);
 void snout_camera_source_free(struct CameraSource *source);
 
 /**
+ * Compare two camera sources for equality.
+ *
+ * Returns `true` if the sources are equal, `false` otherwise.
+ * If either source is null, returns `false`.
+ */
+bool snout_camera_source_eq(const struct CameraSource *a, const struct CameraSource *b);
+
+/**
  * Open a mono camera using the given source.
  *
  * Returns null if the camera could not be opened.
@@ -798,13 +806,12 @@ struct SnoutEyeReport snout_eye_tracker_track(struct EyeTracker *tracker);
 struct SnoutEyeTrackerFields snout_eye_tracker_fields(struct EyeTracker *tracker);
 
 /**
- * Create a new output with the given destination address.
+ * Create a new output.
  *
- * `destination` is a null-terminated string like "127.0.0.1:9000".
- * Returns null if the socket could not be bound or the address could not be resolved.
- * See [`snout_last_error`] for details.
+ * You need to call [`snout_output_set_destination`] to set the destination address.
+ * The resulting object is owned by the caller and must be freed with [`snout_output_free`].
  */
-struct Output *snout_output_new(const char *destination);
+struct Output *snout_output_new(void);
 
 /**
  * Free an output.
@@ -814,7 +821,7 @@ void snout_output_free(struct Output *output);
 /**
  * Set the destination address of the output.
  *
- * `destination` is a null-terminated string like "127.0.0.1:9000".
+ * `destination` is a null-terminated string like "127.0.0.1:9400".
  */
 void snout_output_set_destination(struct Output *output, const char *destination);
 
@@ -842,6 +849,8 @@ void snout_output_flush(struct Output *output);
  *
  * This can be used for direct access to the transport and emitters.
  * Pointers are valid until [`snout_output_free`] is called.
+ *
+ * The transport pointer is null if no destination is set.
  */
 struct SnoutOutputFields snout_output_fields(struct Output *output);
 

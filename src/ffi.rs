@@ -287,6 +287,21 @@ pub extern "C" fn snout_camera_source_free(source: *mut CameraSource) {
     }
 }
 
+/// Compare two camera sources for equality.
+///
+/// Returns `true` if the sources are equal, `false` otherwise.
+/// If either source is null, returns `false`.
+#[unsafe(no_mangle)]
+pub extern "C" fn snout_camera_source_eq(a: *const CameraSource, b: *const CameraSource) -> bool {
+    clear_last_error();
+
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+
+    unsafe { (*a) == (*b) }
+}
+
 /// Open a mono camera using the given source.
 ///
 /// Returns null if the camera could not be opened.
