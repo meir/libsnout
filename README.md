@@ -8,10 +8,10 @@ It's designed to be a library; easy to integrate in a variety of frontend projec
 
 Libsnout requires the following build dependencies (in the form of fedora package names):
 
-1. llvm
-2. llvm-devel
-3. onnxruntime
-4. onnxruntime-devel
+- llvm
+- llvm-devel
+- onnxruntime
+- onnxruntime-devel
 
 
 ## Building and running the CLI
