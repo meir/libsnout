@@ -1,9 +1,13 @@
 #libonnxruntime = "/usr/lib64/libonnxruntime.so"
-libonnxruntime = "/home/proto/Downloads/onnxruntime-linux-x64-gpu-1.25.0/lib/libonnxruntime.so"
 
 [eye]
 #link = true
 model = "eyeModel.onnx" # If not specified, tracking will be disabled.
+
+#[eye.filter]
+#enable = true
+#min_cutoff = 0.5
+#beta = 3.0
 
 [eye.left]
 camera = "Bigeye: Bigeye (800x400 @ 90fps)" # If not specified, tracking will be disabled.
@@ -37,6 +41,11 @@ camera = "Bigeye: Bigeye (800x400 @ 90fps)" # If not specified, tracking will be
 # You can use a URL like "http://127.0.0.1:8080/mjpeg/stream.jpg" here as well.
 camera = "USB 2.0 Camera: USB Camera (640x480 @ 30fps)" # If not specified, tracking will be disabled.
 model = "faceModel.onnx" # If not specified, tracking will be disabled.
+
+#[face.filter]
+#enable = true
+#min_cutoff = 0.5
+#beta = 3.0
 
 #[face.crop]
 #scale = 1.0

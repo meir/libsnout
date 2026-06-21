@@ -1,6 +1,7 @@
 mod commands;
 
 use std::path::PathBuf;
+use std::process;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing_subscriber::EnvFilter;
@@ -18,7 +19,16 @@ fn main() {
             .init();
     }
 
-    let config = snout::config::load(&cli.config).unwrap();
+    let config_path = cli
+        .config
+        .or_else(snout::config::find_default_config)
+        .unwrap_or_else(|| {
+            eprintln!("Error: No config file found.");
+            eprintln!("Specify a config file with --config <path>, or place one in a standard location.");
+            process::exit(1);
+        });
+
+    let config = snout::config::load(&config_path).unwrap();
 
     match cli.command {
         Commands::ListCameras {} => ListCamerasCommand::new().run(),
@@ -39,7 +49,7 @@ fn main() {
 #[command(flatten_help = true)]
 struct Args {
     #[arg(short, long, value_name = "config.toml")]
-    config: PathBuf,
+    config: Option<PathBuf>,
 
     /// Enable verbose output (tracing logs).
     #[arg(short, long)]

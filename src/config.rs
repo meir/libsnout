@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{calibration::FaceShape, capture::processing::{Crop, PreprocessConfig}};
+use crate::{calibration::FaceShape, capture::processing::{Crop, PreprocessConfig}, pipeline::FilterParameters};
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -95,6 +95,7 @@ pub struct Config {
 pub struct EyesConfig {
     pub link: Option<bool>,
     pub model: Option<PathBuf>,
+    pub filter: Option<FilterParameters>,
 
     pub left: EyeConfig,
     pub right: EyeConfig,
@@ -112,6 +113,7 @@ pub struct EyeConfig {
 pub struct FaceConfig {
     pub camera: String,
     pub model: Option<PathBuf>,
+    pub filter: Option<FilterParameters>,
     #[serde(default)]
     pub crop: Crop,
     pub transform: Option<PreprocessConfig>,

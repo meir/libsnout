@@ -64,6 +64,10 @@ impl EyeTracker {
             .calibrator
             .set_link_eyes(config.eye.link.unwrap_or(true));
 
+        if let Some(filter) = config.eye.filter {
+            tracker.pipeline.set_filter(filter);
+        }
+
         // Left preprocessor
         tracker.left_preprocessor.set_crop(config.eye.left.crop);
 

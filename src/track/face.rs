@@ -42,6 +42,10 @@ impl FaceTracker {
 
         tracker.pipeline.set_model(config.face.model.as_ref())?;
 
+        if let Some(filter) = config.face.filter {
+            tracker.pipeline.set_filter(filter);
+        }
+
         let camera = resolve_source(cameras, &config.face.camera);
 
         tracker.set_source(camera);
