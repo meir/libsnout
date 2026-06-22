@@ -94,23 +94,24 @@ impl EtvrEmitter {
     }
 }
 
-pub struct NativeEmitter {
-    // TODO
+pub struct VrchatEmitter {
+    max_yaw_deg: f32,
+    max_pitch_deg: f32,
 }
 
-impl NativeEmitter {
-    pub fn new() -> Self {
-        Self {}
+impl VrchatEmitter {
+    pub fn new(max_yaw_deg: f32, max_pitch_deg: f32) -> Self {
+        Self {
+            max_yaw_deg,
+            max_pitch_deg,
+        }
     }
 
     pub fn process_eyes(&mut self, weights: Weights<EyeShape>, transport: &mut OscTransport) {
-        const MAX_YAW_DEG: f32 = 30.;
-        const MAX_PITCH_DEG: f32 = 20.;
-
-        let left_yaw = weights[EyeShape::LeftEyeYaw].clamp(-1., 1.) * MAX_YAW_DEG;
-        let right_yaw = weights[EyeShape::RightEyeYaw].clamp(-1., 1.) * MAX_YAW_DEG;
-        let left_pitch = weights[EyeShape::LeftEyePitch].clamp(-1., 1.) * MAX_PITCH_DEG;
-        let right_pitch = weights[EyeShape::RightEyePitch].clamp(-1., 1.) * MAX_PITCH_DEG;
+        let left_yaw = weights[EyeShape::LeftEyeYaw].clamp(-1., 1.) * self.max_yaw_deg;
+        let right_yaw = weights[EyeShape::RightEyeYaw].clamp(-1., 1.) * self.max_yaw_deg;
+        let left_pitch = weights[EyeShape::LeftEyePitch].clamp(-1., 1.) * self.max_pitch_deg;
+        let right_pitch = weights[EyeShape::RightEyePitch].clamp(-1., 1.) * self.max_pitch_deg;
 
         let eyes_closed = ((weights[EyeShape::LeftEyeLid] + weights[EyeShape::RightEyeLid]) / 2.).clamp(0., 1.);
 

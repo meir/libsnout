@@ -132,7 +132,7 @@ pub struct OutputConfig {
     #[serde(default)]
     pub osc: OscConfig,
 
-    pub native: Option<NativeOscConfig>,
+    pub vrchat: Option<VrchatOscConfig>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -141,8 +141,24 @@ pub struct OscConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NativeOscConfig {
+pub struct VrchatOscConfig {
     pub destination: String,
+
+    #[serde(default = "VrchatOscConfig::default_max_yaw")]
+    pub max_yaw: f32,
+
+    #[serde(default = "VrchatOscConfig::default_max_pitch")]
+    pub max_pitch: f32,
+}
+
+impl VrchatOscConfig {
+    fn default_max_yaw() -> f32 {
+        30.0
+    }
+
+    fn default_max_pitch() -> f32 {
+        20.0
+    }
 }
 
 impl Default for OscConfig {

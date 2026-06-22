@@ -1,15 +1,15 @@
 use std::net::ToSocketAddrs;
 
 use crate::{
-    calibration::{EyeShape, FaceShape, Weights}, config::Config, output::{BabbleEmitter, EtvrEmitter, NativeEmitter, OscTransport, TransportError},
+    calibration::{EyeShape, FaceShape, Weights}, config::Config, output::{BabbleEmitter, EtvrEmitter, VrchatEmitter, OscTransport, TransportError},
 };
 
 pub struct Output {
     pub transport: Option<OscTransport>,
     pub babble: BabbleEmitter,
     pub etvr: EtvrEmitter,
-    pub native: NativeEmitter,
-    pub native_transport: Option<OscTransport>,
+    pub vrchat: VrchatEmitter,
+    pub vrchat_transport: Option<OscTransport>,
 }
 
 impl Output {
@@ -18,8 +18,8 @@ impl Output {
             transport: None,
             babble: BabbleEmitter::new(),
             etvr: EtvrEmitter::new(),
-            native: NativeEmitter::new(),
-            native_transport: None,
+            vrchat: VrchatEmitter::new(30.0, 20.0),
+            vrchat_transport: None,
         }
     }
 
@@ -28,8 +28,9 @@ impl Output {
 
         output.set_destination(&config.output.osc.destination)?;
 
-        if let Some(native) = &config.output.native {
+        if let Some(native) = &config.output.vrchat {
             output.set_native_destination(&native.destination)?;
+            output.vrchat = VrchatEmitter::new(native.max_yaw, native.max_pitch);
         }
 
         Ok(output)
@@ -47,7 +48,7 @@ impl Output {
         &mut self,
         destination: impl ToSocketAddrs,
     ) -> Result<(), TransportError> {
-        self.native_transport = Some(OscTransport::udp(destination)?);
+        self.vrchat_transport = Some(OscTransport::udp(destination)?);
         Ok(())
     }
 
@@ -67,8 +68,8 @@ impl Output {
         self.babble.process_eyes(weights, transport);
         self.etvr.process_eyes(weights, transport);
 
-        if let Some(native_transport) = &mut self.native_transport {
-            self.native.process_eyes(weights, native_transport);
+        if let Some(native_transport) = &mut self.vrchat_transport {
+            self.vrchat.process_eyes(weights, native_transport);
         }
     }
 
