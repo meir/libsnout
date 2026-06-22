@@ -289,7 +289,9 @@ baseline = "eyeModel.safetensors"
 #[output.osc]
 #destination = "127.0.0.1:9400" # Set this to 127.0.0.1:8888 if you use VRCFT.Avalonia.
 
-# https://docs.vrchat.com/docs/osc-eye-tracking
+# Enable VRChat native OSC eye tracking.
+# By default this output is disabled.
+# See https://docs.vrchat.com/docs/osc-eye-tracking for more information.
 #[output.vrchat]
 #destination = "127.0.0.1:9000"
 #max_pitch = 30.0
