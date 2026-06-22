@@ -74,10 +74,14 @@ impl Output {
     }
 
     pub fn flush(&mut self) -> Result<(), TransportError> {
-        let Some(transport) = &mut self.transport else {
-            return Ok(());
-        };
+        if let Some(transport) = &mut self.transport {
+            transport.flush()?;
+        }
 
-        transport.flush()
+        if let Some(native_transport) = &mut self.vrchat_transport {
+            native_transport.flush()?;
+        }
+
+        Ok(())
     }
 }
