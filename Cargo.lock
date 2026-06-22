@@ -5964,6 +5964,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sampleio"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sanitize-filename"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6247,7 +6255,6 @@ dependencies = [
  "burn",
  "burn-onnx",
  "burn-store",
- "byteorder",
  "image",
  "imageproc",
  "ndarray 0.17.2",
@@ -6256,6 +6263,7 @@ dependencies = [
  "rand 0.8.6",
  "rosc",
  "safetensors 0.7.0",
+ "sampleio",
  "serde",
  "thiserror 2.0.18",
  "toml",

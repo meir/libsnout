@@ -4,7 +4,7 @@ use imageproc::contrast::equalize_histogram;
 use crate::models::dual_eye_net::LABEL_DIMS;
 use crate::train::FloatImage;
 use crate::train::data::DataError;
-use crate::train::data::load::FrameMeta;
+use sampleio::FrameMeta;
 
 #[derive(Debug, Clone)]
 pub struct CaptureFrame {

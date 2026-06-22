@@ -4,57 +4,9 @@ use std::path::Path;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
-const FRAME_META_SIZE: usize = 100;
-
-/// Sanity cap on per-eye JPEG size.
-const MAX_JPEG_SIZE: usize = 10 * 1024 * 1024;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FrameMeta {
-    pub routine_pitch: f32,
-    pub routine_yaw: f32,
-    pub routine_distance: f32,
-    pub routine_convergence: f32,
-    pub fov_adjust_distance: f32,
-    pub left_eye_pitch: f32,
-    pub left_eye_yaw: f32,
-    pub right_eye_pitch: f32,
-    pub right_eye_yaw: f32,
-    pub routine_left_lid: f32,
-    pub routine_right_lid: f32,
-    pub routine_brow_raise: f32,
-    pub routine_brow_angry: f32,
-    pub routine_widen: f32,
-    pub routine_squint: f32,
-    pub routine_dilate: f32,
-
-    pub timestamp: i64,
-    pub video_timestamp_left: i64,
-    pub video_timestamp_right: i64,
-
-    pub routine_state: i32,
-    pub jpeg_left_len: i32,
-    pub jpeg_right_len: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct RawFrame {
-    pub meta: FrameMeta,
-    pub jpeg_left: Vec<u8>,
-    pub jpeg_right: Vec<u8>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ReadError {
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("invalid JPEG length: left={left}, right={right}")]
-    InvalidJpegLength { left: i32, right: i32 },
-
-    #[error("JPEG length exceeds {MAX_JPEG_SIZE}-byte guard: left={left}, right={right}")]
-    JpegTooLarge { left: i32, right: i32 },
-}
+use crate::error::ReadError;
+use crate::flags::RoutineState;
+use crate::frame::{FRAME_META_SIZE, FrameMeta, MAX_JPEG_SIZE, RawFrame};
 
 pub struct CaptureReader<R: Read> {
     inner: R,
@@ -144,7 +96,7 @@ impl<R: Read> CaptureReader<R> {
         let jpeg_left_len = cur.read_i32::<LittleEndian>()?;
         let jpeg_right_len = cur.read_i32::<LittleEndian>()?;
 
-        debug_assert!(cur.is_empty(), "header parser did not consume all bytes");
+        debug_assert!(cur.is_empty());
 
         Ok(Some(FrameMeta {
             routine_pitch,
@@ -166,7 +118,7 @@ impl<R: Read> CaptureReader<R> {
             timestamp,
             video_timestamp_left,
             video_timestamp_right,
-            routine_state,
+            routine_state: RoutineState::from_raw(routine_state),
             jpeg_left_len,
             jpeg_right_len,
         }))

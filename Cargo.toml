@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/snout-cli"]
+members = ["crates/snout-cli", "crates/sampleio"]
 
 [package]
 name = "snout"
@@ -14,7 +14,7 @@ thiserror = "2.0.18"
 v4l = "0.14.0"
 burn = { version = "0.21.0-pre.3", features = ["store", "wgpu", "autodiff", "dataset"] }
 burn-store = "=0.21.0-pre.3"
-byteorder = "1.5.0"
+sampleio = { path = "crates/sampleio" }
 rand = "0.8"
 tracing = "0.1"
 onnx-rs = "0.1.2"

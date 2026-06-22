@@ -1,16 +1,15 @@
 mod capture_frame;
 mod corruption;
 mod error;
-mod load;
 
 use std::io;
 use std::path::Path;
 
 use image::{GrayImage, ImageFormat, load_from_memory_with_format};
+use sampleio::{CaptureReader, ReadError};
 
 use capture_frame::CaptureFrame;
 use corruption::CorruptionDetector;
-use load::{CaptureReader, ReadError};
 
 use crate::models::dual_eye_net::{HISTORY_BASE, HISTORY_LEN};
 
@@ -51,6 +50,10 @@ impl DataReader {
             };
 
             raw_frames += 1;
+
+            if !raw.meta.is_good_data() {
+                continue;
+            }
 
             let left_img = match decode_jpeg(&raw.jpeg_left) {
                 Ok(img) => img,
