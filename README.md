@@ -60,6 +60,7 @@ Add libsnout to your flake.nix inputs:
 
 ```nix
   libsnout.url = "github:Darksecond/libsnout";
+
 ```
 
 Either use the package directly or add it to your overlays:
@@ -74,6 +75,7 @@ nixpkgs.overlay = [
 environment.systemPackages = with pkgs; [
   snout-cli
 ];
+
 ```
 ## Configuring 
 
