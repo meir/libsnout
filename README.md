@@ -5,6 +5,7 @@ It's designed to be a library; easy to integrate in a variety of frontend projec
 
 - Building:
     - [Building and running the cli](#building-and-running-the-cli)
+    - [Installing on NixOS](#installing-on-nixos)
 - Configuring:
     - [Configuration file location](#configuration-file-location)
     - [Disabling specific tracking points](#disabling-specific-tracking-points)
@@ -53,6 +54,27 @@ Help on how to use the cli tool can be obtained with:
 snout-cli help
 ``` 
 
+### Installing on NixOS
+
+Add libsnout to your flake.nix inputs:
+
+```nix
+  libsnout.url = "github:Darksecond/libsnout";
+```
+
+Either use the package directly or add it to your overlays:
+
+```nix
+nixpkgs.overlay = [
+  (final: prev: {
+    snout-cli = libsnout.packages."${pkgs.stdenv.hostPlatform.system}".default;
+  })
+];
+
+environment.systemPackages = with pkgs; [
+  snout-cli
+];
+```
 ## Configuring 
 
 ### Configuration file location
