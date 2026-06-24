@@ -29,17 +29,17 @@
         };
         cargoBuildFlags = [ "--package" "snout-cli" ];
 
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-          rustPlatform.bindgenHook
-          makeWrapper
+        nativeBuildInputs = [
+          pkgs.pkg-config
+          pkgs.rustPlatform.bindgenHook
+          pkgs.makeWrapper
         ];
 
         postFixup = let
-          libs = with pkgs; lib.makeLibraryPath [
-            llvm
-            onnxruntime
-            vulkan-loader
+          libs = lib.makeLibraryPath [
+            pkgs.llvm
+            pkgs.onnxruntime
+            pkgs.vulkan-loader
           ];
         in
         ''
