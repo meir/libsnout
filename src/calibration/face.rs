@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::calibration::{Bounds, Shape, Weights};
+use crate::calibration::Bounds;
+use crate::weights::{Shape, Weights};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
@@ -138,14 +139,14 @@ impl Shape for FaceShape {
 
 pub struct ManualFaceCalibrator {
     bounds: Vec<Bounds>,
-    weights: Vec<f32>,
+    weights: Weights<FaceShape>,
 }
 
 impl ManualFaceCalibrator {
     pub fn new() -> Self {
         Self {
             bounds: vec![Bounds::new_01(); FaceShape::count()],
-            weights: default_weights(),
+            weights: Weights::new(),
         }
     }
 
@@ -165,16 +166,14 @@ impl ManualFaceCalibrator {
         self.bounds[shape as usize].lower = lower;
     }
 
-    pub fn calibrate(&mut self, weights: &[f32]) -> Weights<'_, FaceShape> {
-        // Update weights with new values
-        for ((weight, value), bounds) in self.weights.iter_mut().zip(weights).zip(&self.bounds) {
-            *weight = bounds.remap(*value);
+    pub fn calibrate(&mut self, raw: &Weights<FaceShape>) -> &Weights<FaceShape> {
+        self.weights.clear();
+
+        for (shape, value) in raw.iter() {
+            let bounds = &self.bounds[<FaceShape as Into<usize>>::into(shape)];
+            self.weights.set(shape, bounds.remap(value));
         }
 
-        Weights::new(&self.weights)
+        &self.weights
     }
-}
-
-fn default_weights() -> Vec<f32> {
-    vec![0.0; FaceShape::count()]
 }

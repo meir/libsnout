@@ -3,7 +3,8 @@ use std::net::{ToSocketAddrs, UdpSocket};
 use rosc::{OscMessage, OscPacket, OscType, encoder};
 use thiserror::Error;
 
-use crate::calibration::{EyeShape, FaceShape, Weights};
+use crate::calibration::{EyeShape, FaceShape};
+use crate::weights::Weights;
 
 pub struct OscTransport {
     socket: UdpSocket,
@@ -55,7 +56,7 @@ impl BabbleEmitter {
         Self {}
     }
 
-    pub fn process_face(&mut self, weights: Weights<FaceShape>, transport: &mut OscTransport) {
+    pub fn process_face(&mut self, weights: &Weights<FaceShape>, transport: &mut OscTransport) {
         for (shape, value) in weights.iter() {
             let msg = OscMessage {
                 addr: shape.to_babble().to_string(),
@@ -66,7 +67,7 @@ impl BabbleEmitter {
         }
     }
 
-    pub fn process_eyes(&mut self, weights: Weights<EyeShape>, transport: &mut OscTransport) {
+    pub fn process_eyes(&mut self, weights: &Weights<EyeShape>, transport: &mut OscTransport) {
         let _ = (weights, transport);
     }
 }
@@ -80,7 +81,7 @@ impl EtvrEmitter {
         Self {}
     }
 
-    pub fn process_eyes(&mut self, weights: Weights<EyeShape>, transport: &mut OscTransport) {
+    pub fn process_eyes(&mut self, weights: &Weights<EyeShape>, transport: &mut OscTransport) {
         for (shape, value) in weights.iter() {
             let value = shape.to_etvr_value(value);
 
@@ -107,13 +108,15 @@ impl VrchatEmitter {
         }
     }
 
-    pub fn process_eyes(&mut self, weights: Weights<EyeShape>, transport: &mut OscTransport) {
-        let left_yaw = weights[EyeShape::LeftEyeYaw].clamp(-1., 1.) * self.max_yaw_deg;
-        let right_yaw = weights[EyeShape::RightEyeYaw].clamp(-1., 1.) * self.max_yaw_deg;
-        let left_pitch = weights[EyeShape::LeftEyePitch].clamp(-1., 1.) * self.max_pitch_deg;
-        let right_pitch = weights[EyeShape::RightEyePitch].clamp(-1., 1.) * self.max_pitch_deg;
+    pub fn process_eyes(&mut self, weights: &Weights<EyeShape>, transport: &mut OscTransport) {
+        let left_yaw = weights.get(EyeShape::LeftEyeYaw).unwrap_or(0.).clamp(-1., 1.) * self.max_yaw_deg;
+        let right_yaw = weights.get(EyeShape::RightEyeYaw).unwrap_or(0.).clamp(-1., 1.) * self.max_yaw_deg;
+        let left_pitch = weights.get(EyeShape::LeftEyePitch).unwrap_or(0.).clamp(-1., 1.) * self.max_pitch_deg;
+        let right_pitch = weights.get(EyeShape::RightEyePitch).unwrap_or(0.).clamp(-1., 1.) * self.max_pitch_deg;
 
-        let eyes_closed = 1. - ((weights[EyeShape::LeftEyeLid] + weights[EyeShape::RightEyeLid]) / 2.).clamp(0., 1.);
+        let left_lid = weights.get(EyeShape::LeftEyeLid).unwrap_or(0.);
+        let right_lid = weights.get(EyeShape::RightEyeLid).unwrap_or(0.);
+        let eyes_closed = 1. - ((left_lid + right_lid) / 2.).clamp(0., 1.);
 
         let eyes_closed_msg = OscMessage {
             addr: "/tracking/eye/EyesClosedAmount".to_string(),

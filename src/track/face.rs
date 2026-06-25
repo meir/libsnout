@@ -1,5 +1,5 @@
 use crate::{
-    calibration::{FaceShape, ManualFaceCalibrator, Weights},
+    calibration::{FaceShape, ManualFaceCalibrator},
     capture::{
         CameraError, Frame, MonoCamera,
         discovery::{CameraInfo, CameraSource, resolve_source},
@@ -8,12 +8,13 @@ use crate::{
     config::Config,
     pipeline::FacePipeline,
     track::TrackerError,
+    weights::Weights,
 };
 
 pub struct FaceReport<'a> {
     pub raw_frame: &'a Frame,
     pub processed_frame: &'a Frame,
-    pub weights: Weights<'a, FaceShape>,
+    pub weights: &'a Weights<FaceShape>,
 }
 
 pub struct FaceTracker {
@@ -93,7 +94,9 @@ impl FaceTracker {
 
         let processed_frame = self.preprocessor.process(raw_frame)?;
 
-        let raw_weights = self.pipeline.run(processed_frame)?.unwrap();
+        let Some(raw_weights) = self.pipeline.run(processed_frame)? else {
+            return Ok(None);
+        };
 
         let weights = self.calibrator.calibrate(raw_weights);
 

@@ -79,9 +79,9 @@ typedef enum SnoutError {
 } SnoutError;
 
 enum FaceShape
-#ifdef __cplusplus
+#if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
   : uint8_t
-#endif // __cplusplus
+#endif // defined(__cplusplus) || __STDC_VERSION__ >= 202311L
  {
   FaceShape_CheekPuffLeft,
   FaceShape_CheekPuffRight,
@@ -130,13 +130,17 @@ enum FaceShape
   FaceShape_TongueTwistRight,
 };
 #ifndef __cplusplus
+#if __STDC_VERSION__ >= 202311L
+typedef enum FaceShape FaceShape;
+#else
 typedef uint8_t FaceShape;
+#endif // __STDC_VERSION__ >= 202311L
 #endif // __cplusplus
 
 enum EyeShape
-#ifdef __cplusplus
+#if defined(__cplusplus) || __STDC_VERSION__ >= 202311L
   : uint8_t
-#endif // __cplusplus
+#endif // defined(__cplusplus) || __STDC_VERSION__ >= 202311L
  {
   EyeShape_LeftEyePitch,
   EyeShape_LeftEyeYaw,
@@ -146,7 +150,11 @@ enum EyeShape
   EyeShape_RightEyeLid,
 };
 #ifndef __cplusplus
+#if __STDC_VERSION__ >= 202311L
+typedef enum EyeShape EyeShape;
+#else
 typedef uint8_t EyeShape;
+#endif // __STDC_VERSION__ >= 202311L
 #endif // __cplusplus
 
 typedef struct BabbleEmitter BabbleEmitter;
@@ -160,12 +168,6 @@ typedef struct Config Config;
 
 typedef struct EtvrEmitter EtvrEmitter;
 
-/**
- * Calibrator for eye shapes.
- *
- * This will calibrate the raw values out of the pipeline.
- * Only the LeftEyeLid and RightEyeLid bounds are respected.
- */
 typedef struct EyeCalibrator EyeCalibrator;
 
 typedef struct EyePipeline EyePipeline;
@@ -189,6 +191,10 @@ typedef struct OscTransport OscTransport;
 typedef struct Output Output;
 
 typedef struct StereoCamera StereoCamera;
+
+typedef struct Weights_EyeShape Weights_EyeShape;
+
+typedef struct Weights_FaceShape Weights_FaceShape;
 
 /**
  * Represents a pair of stereo camera frames.
@@ -248,9 +254,9 @@ typedef struct SnoutFaceReport {
    */
   const struct Frame *processed_frame;
   /**
-   * A pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats.
+   * A pointer to the weights.
    */
-  const float *weights;
+  const struct Weights_FaceShape *weights;
 } SnoutFaceReport;
 
 typedef struct SnoutFaceTrackerFields {
@@ -277,9 +283,9 @@ typedef struct SnoutEyeReport {
    */
   const struct Frame *right_processed_frame;
   /**
-   * A pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats, or null during warmup.
+   * A pointer to the weights, or null during warmup.
    */
-  const float *weights;
+  const struct Weights_EyeShape *weights;
 } SnoutEyeReport;
 
 typedef struct SnoutEyeTrackerFields {
@@ -300,12 +306,12 @@ extern "C" {
 #endif // __cplusplus
 
 /**
- * The number of face shape weights returned by [`snout_face_pipeline_run`].
+ * The number of face shapes.
  */
 extern const uintptr_t SNOUT_FACE_SHAPE_COUNT;
 
 /**
- * The number of eye shape weights returned by [`snout_eye_pipeline_run`].
+ * The number of eye shapes.
  */
 extern const uintptr_t SNOUT_EYE_SHAPE_COUNT;
 
@@ -529,17 +535,17 @@ void snout_face_pipeline_set_filter(struct FacePipeline *pipeline,
 /**
  * Run the face pipeline on a frame.
  *
- * Returns a pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats.
- * The returned array can be indexed using the [`FaceShape`] enum variants cast to an integer.
- *
- * A returned null either indicates an error, or that the pipeline was not ready yet.
- * Check [`snout_get_last_error`] to determine which.
- * It will be `SnoutError_Ok` if the pipeline was not ready yet.
+ * Returns a pointer to a `Weights<FaceShape>`, or null if the pipeline
+ * was not ready yet or an error occurred.
  *
  * The returned pointer is valid until the next call to [`snout_face_pipeline_run`]
  * or [`snout_face_pipeline_free`].
+ *
+ * Check [`snout_get_last_error`] to determine which.
+ * It will be `SnoutError_Ok` if the pipeline was not ready yet.
  */
-const float *snout_face_pipeline_run(struct FacePipeline *pipeline, const struct Frame *frame);
+const struct Weights_FaceShape *snout_face_pipeline_run(struct FacePipeline *pipeline,
+                                                        const struct Frame *frame);
 
 /**
  * Free the face pipeline.
@@ -577,19 +583,18 @@ void snout_eye_pipeline_set_filter(struct EyePipeline *pipeline,
 /**
  * Run the eye pipeline on a pair of stereo frames.
  *
- * Returns a pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats.
- * The returned array can be indexed using the [`EyeShape`] enum variants cast to an integer.
- *
- * A returned null either indicates an error, or that the pipeline was not ready yet.
- * Check [`snout_last_error`] to determine which.
- * It will be `SnoutError_Ok` if the pipeline was not ready yet.
+ * Returns a pointer to a `Weights<EyeShape>`, or null if the pipeline
+ * was not ready yet or an error occurred.
  *
  * The returned pointer is valid until the next call to [`snout_eye_pipeline_run`]
  * or [`snout_eye_pipeline_free`].
+ *
+ * Check [`snout_last_error`] to determine which.
+ * It will be `SnoutError_Ok` if the pipeline was not ready yet.
  */
-const float *snout_eye_pipeline_run(struct EyePipeline *pipeline,
-                                    const struct Frame *left,
-                                    const struct Frame *right);
+const struct Weights_EyeShape *snout_eye_pipeline_run(struct EyePipeline *pipeline,
+                                                      const struct Frame *left,
+                                                      const struct Frame *right);
 
 /**
  * Free the eye pipeline.
@@ -617,19 +622,15 @@ void snout_face_calibrator_set_bounds(struct ManualFaceCalibrator *calibrator,
 /**
  * Calibrate raw face weights.
  *
- * `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
- *
- * Returns a pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats, or null if an error occurred.
- * The returned slice can be indexed using the [`FaceShape`] enum variants cast to an integer.
+ * Returns a pointer to calibrated `Weights<FaceShape>`, or null if an error occurred.
  *
  * The returned pointer is valid until the next call to [`snout_face_calibrator_calibrate`]
  * or [`snout_face_calibrator_free`].
  */
-const float *snout_face_calibrator_calibrate(struct ManualFaceCalibrator *calibrator,
-                                             const float *weights);
+const struct Weights_FaceShape *snout_face_calibrator_calibrate(struct ManualFaceCalibrator *calibrator,
+                                                                const struct Weights_FaceShape *weights);
 
 /**
- * Free the face calibrator.
  *
  * Does nothing if the pointer is null.
  */
@@ -665,15 +666,13 @@ void snout_eye_calibrator_set_link_eyes(struct EyeCalibrator *calibrator, bool l
 /**
  * Calibrate raw eye weights.
  *
- * `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
- *
- * Returns a pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats, or null if an error occurred.
- * The returned slice can be indexed using the [`EyeShape`] enum.
+ * Returns a pointer to calibrated `Weights<EyeShape>`, or null if an error occurred.
  *
  * The returned pointer is valid until the next call to [`snout_eye_calibrator_calibrate`]
  * or [`snout_eye_calibrator_free`].
  */
-const float *snout_eye_calibrator_calibrate(struct EyeCalibrator *calibrator, const float *weights);
+const struct Weights_EyeShape *snout_eye_calibrator_calibrate(struct EyeCalibrator *calibrator,
+                                                              const struct Weights_EyeShape *weights);
 
 /**
  * Free the eye calibrator.
@@ -760,11 +759,9 @@ void snout_babble_emitter_free(struct BabbleEmitter *emitter);
 
 /**
  * Send face weights via the Babble protocol.
- *
- * `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
  */
 void snout_babble_emitter_process_face(struct BabbleEmitter *emitter,
-                                       const float *weights,
+                                       const struct Weights_FaceShape *weights,
                                        struct OscTransport *transport);
 
 /**
@@ -779,11 +776,9 @@ void snout_etvr_emitter_free(struct EtvrEmitter *emitter);
 
 /**
  * Send eye weights via the ETVR protocol.
- *
- * `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
  */
 void snout_etvr_emitter_process_eyes(struct EtvrEmitter *emitter,
-                                     const float *weights,
+                                     const struct Weights_EyeShape *weights,
                                      struct OscTransport *transport);
 
 /**
@@ -855,17 +850,13 @@ void snout_output_set_destination(struct Output *output, const char *destination
 
 /**
  * Send face weights via all enabled face emitters.
- *
- * `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
  */
-void snout_output_send_face(struct Output *output, const float *weights);
+void snout_output_send_face(struct Output *output, const struct Weights_FaceShape *weights);
 
 /**
  * Send eye weights via all enabled eye emitters.
- *
- * `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
  */
-void snout_output_send_eyes(struct Output *output, const float *weights);
+void snout_output_send_eyes(struct Output *output, const struct Weights_EyeShape *weights);
 
 /**
  * Flush the output transport.
@@ -903,6 +894,10 @@ struct Config *snout_config_load(const char *path);
  * Free the given config created by [`snout_config_load`].
  */
 void snout_config_free(struct Config *config);
+
+bool snout_eye_weights_get(const struct Weights_EyeShape *weights, EyeShape shape, float *out);
+
+bool snout_face_weights_get(const struct Weights_FaceShape *weights, FaceShape shape, float *out);
 
 #ifdef __cplusplus
 }  // extern "C"

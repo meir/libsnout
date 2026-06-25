@@ -8,5 +8,6 @@ pub mod output;
 pub mod pipeline;
 pub mod track;
 pub mod train;
+pub mod weights;
 
 pub mod ffi;
