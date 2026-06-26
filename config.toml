@@ -1,5 +1,4 @@
 #libonnxruntime = "/usr/lib64/libonnxruntime.so"
-libonnxruntime = "/home/proto/Downloads/onnxruntime-linux-x64-gpu-1.25.0/lib/libonnxruntime.so"
 
 [eye]
 #link = true
