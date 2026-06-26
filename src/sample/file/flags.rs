@@ -5,6 +5,8 @@ impl RoutineState {
     pub const FLAG_GOOD_DATA: i32 = 1 << 30;
     pub const FLAG_GAZE_DATA: i32 = 1 << 0;
     pub const FLAG_EXPR_UNLABELED: i32 = 1 << 1;
+    pub const FLAG_VERSION_BIT1: i32 = 1 << 20;
+    pub const FLAG_IN_MOVEMENT: i32 = 1 << 25;
 
     pub const fn from_raw(value: i32) -> Self {
         Self(value)
