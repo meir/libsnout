@@ -1,3 +1,5 @@
+use std::os::fd::RawFd;
+
 use image::GrayImage;
 use v4l::video::capture::Parameters;
 use v4l::{
@@ -8,6 +10,7 @@ use v4l::{
 };
 
 use crate::capture::internal::Camera;
+use crate::capture::sensor::{Gc0308Config, SensorConfig};
 use crate::capture::{CameraError, discovery::V4lSource};
 
 #[derive(Copy, Clone, Debug)]
@@ -32,12 +35,22 @@ impl V4lStream {
     }
 }
 
+struct PendingSensor {
+    config: SensorConfig,
+    attempts: u32,
+    warmup: u32,
+}
+
 pub struct V4lCamera {
-    _device: v4l::Device,
+    device: v4l::Device,
     stream: V4lStream,
     pixel_format: PixelFormat,
+    index: u8,
     pub width: usize,
     pub height: usize,
+
+    /// Sensor config waiting to be applied once the stream is live.
+    pending_sensor: Option<PendingSensor>,
 }
 
 impl Camera for V4lCamera {
@@ -45,6 +58,24 @@ impl Camera for V4lCamera {
         let mut destination = GrayImage::new(self.width as _, self.height as _);
         self.read_frame(&mut destination)?;
         Ok(destination)
+    }
+
+    fn set_sensor_config(&mut self, config: SensorConfig) {
+        // Gate on the hardware once, up front, so read_frame stays a no-op on
+        // cameras this config doesn't apply to.
+        let compatible = match &config {
+            SensorConfig::Gc0308(_) => gc0308::is_compatible_target(self.index),
+        };
+
+        if compatible {
+            self.pending_sensor = Some(PendingSensor {
+                config,
+                attempts: 5,
+                warmup: 5,
+            });
+        } else {
+            tracing::debug!(index = self.index, "sensor config ignored: not a compatible target");
+        }
     }
 }
 
@@ -107,11 +138,13 @@ impl V4lCamera {
         };
 
         Ok(Self {
-            _device: device,
+            device,
             stream,
             pixel_format,
+            index: source.index,
             width,
             height,
+            pending_sensor: None,
         })
     }
 
@@ -146,6 +179,69 @@ impl V4lCamera {
                 destination.copy_from_slice(img.as_raw());
             }
         }
+
+        self.flush_sensor_config();
+
         Ok(())
     }
+
+    /// Applies a pending sensor config once the stream has warmed up, retrying
+    /// on failure (the sensor NAKs I2C until it is powered). A single blocking
+    /// I2C burst on the frame it succeeds, then nothing.
+    fn flush_sensor_config(&mut self) {
+        let Some(pending_sensor) = self.pending_sensor.as_mut() else { return; };
+
+        if pending_sensor.warmup > 0 {
+            pending_sensor.warmup -= 1;
+            return;
+        }
+
+        let fd = self.device.handle().fd();
+        let result = match &pending_sensor.config {
+            SensorConfig::Gc0308(cfg) => write_gc0308(fd, cfg),
+        };
+
+        match result {
+            Ok(()) => {
+                tracing::info!(
+                    config = ?pending_sensor.config,
+                    "applied sensor config"
+                );
+            },
+            // The USB id only identifies the Sonix bridge, so a matching board
+            // may carry a different sensor. A chip-id mismatch is definitive:
+            // don't retry.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!(error = %e, "sensor did not identify as expected, ignoring config");
+            }
+            Err(e) => {
+                pending_sensor.attempts -= 1;
+
+                if pending_sensor.attempts > 0 {
+                    tracing::debug!(
+                        error = %e,
+                        remaining = pending_sensor.attempts,
+                        "sensor config not ready, retrying",
+                    );
+                    return;
+                } else {
+                    tracing::warn!(error = %e, "giving up applying sensor config");
+                }
+            }
+        };
+
+        self.pending_sensor = None;
+    }
+}
+
+/// Applies a GC0308 config: disables the on-sensor auto-exposure loop (which
+/// also writes the sensor defaults) and then overrides with any explicit
+/// exposure/gain. Uses the [`gc0308`] crate as-is.
+fn write_gc0308(fd: RawFd, cfg: &Gc0308Config) -> std::io::Result<()> {
+    gc0308::disable_aec(fd)?;
+
+    gc0308::set_exposure(fd, cfg.exposure)?;
+    gc0308::set_gain(fd, cfg.gain)?;
+
+    Ok(())
 }

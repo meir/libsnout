@@ -1,9 +1,12 @@
 mod track;
 
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use snout::{
-    capture::discovery::query_cameras,
+    capture::{Frame, discovery::query_cameras},
     config::Config,
     sample::sampler::{LongSampler, Stage},
     track::{eye::EyeTracker, face::FaceTracker, initialize_runtime},
@@ -102,61 +105,56 @@ impl CaptureCommand {
 
         initialize_runtime(self.config.libonnxruntime.as_ref());
 
-        {
-            match self.source {
-                CaptureSource::LeftEye => {
-                    let mut tracker = EyeTracker::with_config(&cameras, &self.config).unwrap();
-
-                    let mut i = 0;
-                    while i < 10 {
-                        if let Some(report) = tracker.track().unwrap() {
-                            let frame = report.left_processed_frame.clone();
-                            frame.into_image().save(&self.destination).unwrap();
-
-                            println!("Captured frame!");
-                            return;
-                        }
-                        i += 1;
-                    }
-                    println!("Could not capture frame");
-                }
-                CaptureSource::RightEye => {
-                    let mut tracker = EyeTracker::with_config(&cameras, &self.config).unwrap();
-
-                    let mut i = 0;
-                    while i < 10 {
-                        if let Some(report) = tracker.track().unwrap() {
-                            let frame = report.right_processed_frame.clone();
-                            frame.into_image().save(&self.destination).unwrap();
-
-                            println!("Captured frame!");
-                            return;
-                        }
-
-                        i += 1;
-                    }
-                    println!("Could not capture frame");
-                }
-                CaptureSource::Face => {
-                    let mut tracker = FaceTracker::with_config(&cameras, &self.config).unwrap();
-
-                    let mut i = 0;
-                    while i < 10 {
-                        if let Some(report) = tracker.track().unwrap() {
-                            let frame = report.processed_frame.clone();
-                            frame.into_image().save(&self.destination).unwrap();
-
-                            println!("Captured frame!");
-                            return;
-                        }
-
-                        i += 1;
-                    }
-                    println!("Could not capture frame");
-                }
+        match self.source {
+            CaptureSource::LeftEye => {
+                let mut tracker = EyeTracker::with_config(&cameras, &self.config).unwrap();
+                capture_frame(
+                    || tracker.track().unwrap().map(|r| r.left_processed_frame.clone()),
+                    &self.destination,
+                );
+            }
+            CaptureSource::RightEye => {
+                let mut tracker = EyeTracker::with_config(&cameras, &self.config).unwrap();
+                capture_frame(
+                    || tracker.track().unwrap().map(|r| r.right_processed_frame.clone()),
+                    &self.destination,
+                );
+            }
+            CaptureSource::Face => {
+                let mut tracker = FaceTracker::with_config(&cameras, &self.config).unwrap();
+                capture_frame(
+                    || tracker.track().unwrap().map(|r| r.processed_frame.clone()),
+                    &self.destination,
+                );
             }
         }
     }
+}
+
+/// Frames to pump and discard before capturing.
+///
+/// This gives the camera (and any manual sensor config, e.g. the GC0308, which
+/// only applies a few frames into streaming) time to warm up and for the
+/// exposure to settle before we grab the frame we keep.
+const CAPTURE_WARMUP_FRAMES: usize = 30;
+
+/// Discards the first [`CAPTURE_WARMUP_FRAMES`] frames, then saves the next
+/// captured frame to `destination`. `grab` reads and returns one frame per
+/// call (or `None` if this frame wasn't usable).
+fn capture_frame(mut grab: impl FnMut() -> Option<Frame>, destination: &Path) {
+    for _ in 0..CAPTURE_WARMUP_FRAMES {
+        let _ = grab();
+    }
+
+    for _ in 0..10 {
+        if let Some(frame) = grab() {
+            frame.into_image().save(destination).unwrap();
+            println!("Captured frame!");
+            return;
+        }
+    }
+
+    println!("Could not capture frame");
 }
 
 pub struct SampleCommand {

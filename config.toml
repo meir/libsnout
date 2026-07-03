@@ -58,6 +58,10 @@ model = "faceModel.onnx" # If not specified, tracking will be disabled.
 #vertical_flip = false
 #horizontal_flip = false
 
+#[face.gc0308]
+#exposure = 384 # 0-4095
+#gain = 16      # 0-255
+
 # [[face.calibration]]
 # shape = "CheekPuffLeft"
 # lower = 0.0

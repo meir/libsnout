@@ -2970,6 +2970,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gc0308"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "gemm"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6376,6 +6383,7 @@ name = "snout"
 version = "0.1.0"
 dependencies = [
  "byteorder",
+ "gc0308",
  "image",
  "imageproc",
  "ndarray 0.17.2",

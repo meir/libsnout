@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{calibration::FaceShape, capture::processing::{Crop, PreprocessConfig}, pipeline::FilterParameters};
+use crate::{calibration::FaceShape, capture::{processing::{Crop, PreprocessConfig}, sensor::Gc0308Config}, pipeline::FilterParameters};
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -121,6 +121,10 @@ pub struct FaceConfig {
 
     #[serde(default)]
     pub calibration: Vec<FaceShapeCalibration>,
+
+    /// Manual GC0308 sensor controls, applied only if the face camera is a
+    /// GC0308 board. Left untouched when absent.
+    pub gc0308: Option<Gc0308Config>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mobilenetv4-burn", "crates/snout-cli", "crates/snout-sample-file", "crates/snout-train"]
+members = ["crates/*"]
 
 [package]
 name = "snout"
@@ -14,6 +14,7 @@ thiserror = "2.0.18"
 v4l = "0.14.0"
 byteorder = "1.5.0"
 snout-sample-file = { path = "crates/snout-sample-file" }
+gc0308 = { path = "crates/gc0308" }
 rand = "0.8"
 tracing = "0.1"
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["api-20", "cuda", "load-dynamic", "ndarray", "tracing"] }

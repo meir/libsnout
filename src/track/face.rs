@@ -4,6 +4,7 @@ use crate::{
         CameraError, Frame, MonoCamera,
         discovery::{CameraInfo, CameraSource, resolve_source},
         processing::FramePreprocessor,
+        sensor::SensorConfig,
     },
     config::Config,
     pipeline::FacePipeline,
@@ -24,6 +25,7 @@ pub struct FaceTracker {
 
     camera: Option<MonoCamera>,
     source: Option<CameraSource>,
+    sensor_config: Option<SensorConfig>,
 }
 
 impl FaceTracker {
@@ -35,6 +37,7 @@ impl FaceTracker {
 
             camera: None,
             source: None,
+            sensor_config: None,
         }
     }
 
@@ -50,6 +53,10 @@ impl FaceTracker {
         let camera = resolve_source(cameras, &config.face.camera);
 
         tracker.set_source(camera);
+
+        if let Some(gc0308) = config.face.gc0308.clone() {
+            tracker.sensor_config = Some(SensorConfig::Gc0308(gc0308));
+        }
 
         tracker.preprocessor.set_crop(config.face.crop);
 
@@ -113,8 +120,14 @@ impl FaceTracker {
                 return Ok(false);
             };
 
-            self.camera =
-                Some(MonoCamera::open(source).map_err(|e| TrackerError::Open(e.to_string()))?);
+            let mut camera =
+                MonoCamera::open(source).map_err(|e| TrackerError::Open(e.to_string()))?;
+
+            if let Some(sensor_config) = &self.sensor_config {
+                camera.set_sensor_config(sensor_config.clone());
+            }
+
+            self.camera = Some(camera);
         }
 
         Ok(true)

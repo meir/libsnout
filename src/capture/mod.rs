@@ -1,6 +1,7 @@
 pub mod discovery;
 mod mono;
 pub mod processing;
+pub mod sensor;
 mod stereo;
 
 mod internal;
@@ -9,6 +10,7 @@ use image::GrayImage;
 use thiserror::Error;
 
 pub use mono::MonoCamera;
+pub use sensor::{Gc0308Config, SensorConfig};
 pub use stereo::StereoCamera;
 
 #[derive(Debug, Clone)]
