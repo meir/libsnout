@@ -1,23 +1,29 @@
 mod commands;
+mod log_writer;
+mod status;
 
 use std::path::PathBuf;
 use std::process;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use tracing_subscriber::EnvFilter;
+use indicatif::MultiProgress;
+use tracing_subscriber::{EnvFilter};
 
 use crate::commands::{
     CaptureCommand, ListCamerasCommand, SampleCommand, TrackCommand, TrainCommand,
 };
+use crate::log_writer::StatusLogWriter;
 
 fn main() {
     let cli = Args::parse();
+    let multi = MultiProgress::new();
 
     if cli.verbose {
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
             )
+            .with_writer(StatusLogWriter::new(multi.clone()))
             .init();
     }
 
@@ -38,7 +44,7 @@ fn main() {
             source,
             destination,
         } => TrainCommand::new(source, destination).run(),
-        Commands::Track { eye_debug } => TrackCommand::new(config, eye_debug).run(),
+        Commands::Track { eye_debug } => TrackCommand::new(config, eye_debug).run(&multi),
         Commands::Capture {
             source,
             destination,

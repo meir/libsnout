@@ -81,6 +81,7 @@ pub struct FaceShapeCalibration {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub libonnxruntime: Option<PathBuf>,
+    pub interval: Option<u64>, // in ms
 
     pub eye: EyesConfig,
     pub face: FaceConfig,

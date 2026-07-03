@@ -1,4 +1,5 @@
 #libonnxruntime = "/usr/lib64/libonnxruntime.so"
+#interval = 10 # In milliseconds
 
 [eye]
 #link = true
