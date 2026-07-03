@@ -3,46 +3,70 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crate::capture::Frame;
-use crate::sample::file::{CaptureWriter, FrameMeta, RawFrame, RoutineState};
-use crate::sample::net::Position;
+use snout_sample_file::{CaptureWriter, FrameMeta, RawFrame, RoutineState};
+use crate::sample::net::{Position, Routine};
 
 const JPEG_QUALITY: u8 = 85;
 const POSITION_FRESHNESS: Duration = Duration::from_millis(200);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     Gaze,
+    FreeExpr,
     Blink,
+    Widen,
+    Squint,
+    Brow,
+}
+
+/// Per-frame expression labels stamped onto a captured frame.
+#[derive(Default, Clone, Copy)]
+struct Expr {
+    lid: f32,
+    brow_raise: f32,
+    brow_angry: f32,
+    widen: f32,
+    squint: f32,
+    dilate: f32,
 }
 
 impl Phase {
-    fn flags(&self) -> i32 {
-        match self {
-            Phase::Gaze => {
-                RoutineState::FLAG_GOOD_DATA
-                    | RoutineState::FLAG_IN_MOVEMENT
-                    | RoutineState::FLAG_VERSION_BIT1
-                    | RoutineState::FLAG_GAZE_DATA
-            }
-            Phase::Blink => {
-                RoutineState::FLAG_GOOD_DATA
-                    | RoutineState::FLAG_IN_MOVEMENT
-                    | RoutineState::FLAG_VERSION_BIT1
-            }
+    pub fn from_routine(routine: Routine) -> Phase {
+        match routine {
+            Routine::Gaze(_) => Phase::Gaze,
+            Routine::FreeExpr(_) => Phase::FreeExpr,
+            Routine::Blink(_) => Phase::Blink,
+            Routine::Widen(_) => Phase::Widen,
+            Routine::Squint(_) => Phase::Squint,
+            Routine::Brow(_) => Phase::Brow,
+            _ => panic!("unsupported routine"),
         }
+    }
+
+    fn flags(&self) -> i32 {
+        let mut flags = RoutineState::FLAG_GOOD_DATA
+            | RoutineState::FLAG_IN_MOVEMENT
+            | RoutineState::FLAG_VERSION_BIT1;
+        if self.needs_position() {
+            flags |= RoutineState::FLAG_GAZE_DATA;
+        }
+        if matches!(self, Phase::FreeExpr) {
+            flags |= RoutineState::FLAG_EXPR_UNLABELED;
+        }
+        flags
     }
 
     fn needs_position(&self) -> bool {
-        match self {
-            Phase::Gaze => true,
-            Phase::Blink => false,
-        }
+        !matches!(self, Phase::Blink)
     }
 
-    fn lid(&self) -> f32 {
+    fn expr(&self) -> Expr {
         match self {
-            Phase::Gaze => 1.0,
-            Phase::Blink => 0.0,
+            Phase::Gaze | Phase::FreeExpr => Expr { lid: 1.0, ..Default::default() },
+            Phase::Blink => Expr { lid: 0.0, ..Default::default() },
+            Phase::Widen => Expr { lid: 1.0, widen: 1.0, ..Default::default() },
+            Phase::Squint => Expr { lid: 1.0, squint: 1.0, ..Default::default() },
+            Phase::Brow => Expr { lid: 1.0, brow_angry: 1.0, ..Default::default() },
         }
     }
 }
@@ -65,24 +89,28 @@ impl FrameCollector {
     }
 
     pub fn add(&mut self, phase: Phase, left: &Frame, right: &Frame) {
-        if phase.needs_position() {
+        let position = if phase.needs_position() {
             let Some((pos, stamp)) = self.position else {
                 return;
             };
             if stamp.elapsed() > POSITION_FRESHNESS {
                 return;
             }
-            self.add_with_position(phase, left, right, &pos);
+            Some(pos)
         } else {
-            self.add_without_position(phase, left, right);
-        }
+            None
+        };
+
+        self.push(phase, left, right, position.as_ref());
     }
 
     pub fn write(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
         let mut writer = CaptureWriter::create(path)?;
+
         for frame in self.frames.drain(..) {
             writer.write_frame(&frame)?;
         }
+
         writer.flush()
     }
 
@@ -90,67 +118,38 @@ impl FrameCollector {
         self.frames.len()
     }
 
-    fn add_with_position(&mut self, phase: Phase, left: &Frame, right: &Frame, pos: &Position) {
+    fn push(&mut self, phase: Phase, left: &Frame, right: &Frame, pos: Option<&Position>) {
         let time = timestamp_ms();
+        let expr = phase.expr();
+
+        // Flip them as baballonia does
+        let jpeg_left = encode_jpeg(&right.image);
+        let jpeg_right = encode_jpeg(&left.image);
+
         let meta = FrameMeta {
-            routine_pitch: pos.routine_pitch,
-            routine_yaw: pos.routine_yaw,
-            routine_distance: pos.routine_distance,
-            routine_convergence: pos.routine_convergence,
-            fov_adjust_distance: pos.fov_adjust_distance,
-            left_eye_pitch: pos.left_eye_pitch,
-            left_eye_yaw: -pos.left_eye_yaw,
-            right_eye_pitch: pos.right_eye_pitch,
-            right_eye_yaw: -pos.right_eye_yaw,
-            routine_left_lid: phase.lid(),
-            routine_right_lid: phase.lid(),
-            routine_brow_raise: 0.0,
-            routine_brow_angry: 0.0,
-            routine_widen: 0.0,
-            routine_squint: 0.0,
-            routine_dilate: 0.0,
+            routine_pitch: pos.map_or(0.0, |p| p.routine_pitch),
+            routine_yaw: pos.map_or(0.0, |p| p.routine_yaw),
+            routine_distance: pos.map_or(0.0, |p| p.routine_distance),
+            routine_convergence: pos.map_or(0.0, |p| p.routine_convergence),
+            fov_adjust_distance: pos.map_or(0.0, |p| p.fov_adjust_distance),
+            left_eye_pitch: pos.map_or(0.0, |p| p.left_eye_pitch),
+            left_eye_yaw: pos.map_or(0.0, |p| -p.left_eye_yaw),
+            right_eye_pitch: pos.map_or(0.0, |p| p.right_eye_pitch),
+            right_eye_yaw: pos.map_or(0.0, |p| -p.right_eye_yaw),
+            routine_left_lid: expr.lid,
+            routine_right_lid: expr.lid,
+            routine_brow_raise: expr.brow_raise,
+            routine_brow_angry: expr.brow_angry,
+            routine_widen: expr.widen,
+            routine_squint: expr.squint,
+            routine_dilate: expr.dilate,
             timestamp: time,
             video_timestamp_left: time,
             video_timestamp_right: time,
             routine_state: RoutineState::from_raw(phase.flags()),
-            jpeg_left_len: 0,
-            jpeg_right_len: 0,
+            jpeg_left_len: jpeg_left.len() as i32,
+            jpeg_right_len: jpeg_right.len() as i32,
         };
-        self.push_frame(meta, left, right);
-    }
-
-    fn add_without_position(&mut self, phase: Phase, left: &Frame, right: &Frame) {
-        let time = timestamp_ms();
-        let meta = FrameMeta {
-            routine_pitch: 0.0,
-            routine_yaw: 0.0,
-            routine_distance: 0.0,
-            routine_convergence: 0.0,
-            fov_adjust_distance: 0.0,
-            left_eye_pitch: 0.0,
-            left_eye_yaw: 0.0,
-            right_eye_pitch: 0.0,
-            right_eye_yaw: 0.0,
-            routine_left_lid: phase.lid(),
-            routine_right_lid: phase.lid(),
-            routine_brow_raise: 0.0,
-            routine_brow_angry: 0.0,
-            routine_widen: 0.0,
-            routine_squint: 0.0,
-            routine_dilate: 0.0,
-            timestamp: time,
-            video_timestamp_left: time,
-            video_timestamp_right: time,
-            routine_state: RoutineState::from_raw(phase.flags()),
-            jpeg_left_len: 0,
-            jpeg_right_len: 0,
-        };
-        self.push_frame(meta, left, right);
-    }
-
-    fn push_frame(&mut self, meta: FrameMeta, left: &Frame, right: &Frame) {
-        let jpeg_left = encode_jpeg(&left.image);
-        let jpeg_right = encode_jpeg(&right.image);
 
         self.frames.push(RawFrame {
             meta,

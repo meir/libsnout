@@ -21,6 +21,65 @@ pub enum SamplerError {
     Camera(String),
 }
 
+/// One calibration pass. Each stage is a guided tutorial followed by the recorded
+/// routine, written to its own `<stage>.bin` in the session directory.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Stage {
+    Gaze,
+    FreeExpr,
+    Blink,
+    Widen,
+    Squint,
+    Brow,
+}
+
+impl Stage {
+    /// Canonical record order — must match the reader's session order
+    /// (`snout-train` `data/capture.rs::SESSION_STAGES`).
+    pub const ALL: [Stage; 6] = [
+        Stage::Gaze,
+        Stage::FreeExpr,
+        Stage::Blink,
+        Stage::Widen,
+        Stage::Squint,
+        Stage::Brow,
+    ];
+
+    /// The bin file stem for this stage (`<file_name>.bin`).
+    pub fn file_name(self) -> &'static str {
+        match self {
+            Stage::Gaze => "gaze",
+            Stage::FreeExpr => "free-expr",
+            Stage::Blink => "blink",
+            Stage::Widen => "widen",
+            Stage::Squint => "squint",
+            Stage::Brow => "brow",
+        }
+    }
+
+    fn tutorial(self) -> Routine {
+        match self {
+            Stage::Gaze => Routine::GazeTutorial,
+            Stage::FreeExpr => Routine::GazeExprTutorial,
+            Stage::Blink => Routine::BlinkTutorial,
+            Stage::Widen => Routine::WidenTutorial,
+            Stage::Squint => Routine::SquintTutorial,
+            Stage::Brow => Routine::BrowTutorial,
+        }
+    }
+
+    fn routine(self) -> Routine {
+        match self {
+            Stage::Gaze => Routine::Gaze(Duration::from_secs(60)),
+            Stage::FreeExpr => Routine::FreeExpr(Duration::from_secs(60)),
+            Stage::Blink => Routine::Blink(Duration::from_secs(10)),
+            Stage::Widen => Routine::Widen(Duration::from_secs(20)),
+            Stage::Squint => Routine::Squint(Duration::from_secs(20)),
+            Stage::Brow => Routine::Brow(Duration::from_secs(20)),
+        }
+    }
+}
+
 pub struct LongSampler {
     overlay_path: String,
     overlay_mode: Mode,
@@ -74,36 +133,63 @@ impl LongSampler {
         })
     }
 
-    pub fn run(&mut self, output: impl AsRef<Path>) -> Result<(), SamplerError> {
+    /// Records calibration into the session directory `dir` as one bin per stage.
+    ///
+    /// With an empty `stages` slice the full session is recorded (all of [`Stage::ALL`]);
+    /// otherwise only the listed stages are (re-)recorded, overwriting just their bins.
+    pub fn run(&mut self, dir: impl AsRef<Path>, stages: &[Stage]) -> Result<(), SamplerError> {
+        let dir = dir.as_ref();
+        std::fs::create_dir_all(dir)?;
+
         self.ensure_camera()?;
 
         let mut overlay = Overlay::start(&self.overlay_path, self.overlay_mode)?;
+
+        let stages = if stages.is_empty() { &Stage::ALL[..] } else { stages };
+        for &stage in stages {
+            self.record_stage(&mut overlay, dir, stage)?;
+        }
+
+        self.finish(&mut overlay)
+    }
+
+    /// Runs one stage's tutorial + recording and writes `<dir>/<stage>.bin`.
+    /// Each stage gets a fresh collector, so a crash leaves completed stages on disk.
+    fn record_stage(
+        &mut self,
+        overlay: &mut Overlay,
+        dir: &Path,
+        stage: Stage,
+    ) -> Result<(), SamplerError> {
         let mut collector = FrameCollector::new();
+        self.routine(overlay, &mut collector, stage.tutorial())?;
+        self.routine(overlay, &mut collector, stage.routine())?;
 
-        // Gaze tutorial
-        overlay.begin(Routine::GazeTutorial)?;
-        self.wait_for_finish(&mut overlay)?;
+        let path = dir.join(format!("{}.bin", stage.file_name()));
+        backup_existing(&path)?;
+        collector.write(&path)?;
+        Ok(())
+    }
 
-        // Gaze capture
-        overlay.begin(Routine::Gaze(Duration::from_secs(60)))?;
-        self.collect(&mut overlay, &mut collector, Phase::Gaze)?;
-
-        // Blink tutorial
-        overlay.begin(Routine::BlinkTutorial)?;
-        self.wait_for_finish(&mut overlay)?;
-
-        // Blink capture
-        overlay.begin(Routine::Blink(Duration::from_secs(10)))?;
-        self.collect(&mut overlay, &mut collector, Phase::Blink)?;
-
-        // Write all frames
-        collector.write(output)?;
-
+    fn finish(&mut self, overlay: &mut Overlay) -> Result<(), SamplerError> {
         // Switch to *any* other routine to trigger sound
         overlay.begin(Routine::Trainer)?;
         std::thread::sleep(Duration::from_secs(1));
 
         overlay.close()?;
+
+        Ok(())
+    }
+
+    fn routine(&mut self, overlay: &mut Overlay, collector: &mut FrameCollector, routine: Routine) -> Result<(), SamplerError> {
+        overlay.begin(routine)?;
+
+        if routine.is_tutorial() {
+            self.wait_for_finish(overlay)?;
+        } else {
+            let phase = Phase::from_routine(routine);
+            self.collect(overlay, collector, phase)?;
+        }
 
         Ok(())
     }
@@ -154,6 +240,7 @@ impl LongSampler {
             .process(left_raw)
             .map_err(|e| SamplerError::Camera(e.to_string()))?
             .clone();
+
         let right = self
             .right_preprocessor
             .process(right_raw)
@@ -180,5 +267,73 @@ impl LongSampler {
         }
 
         Ok(())
+    }
+}
+
+/// Moves `path` into a sibling `backups/` directory with a timestamped name if it
+/// already exists, so re-recording a stage never destroys the previous pass. The
+/// reader (`read_capture`) only looks for `<stage>.bin` in the session root, so backups
+/// are ignored by training; restore one by copying it back over `<stage>.bin`.
+fn backup_existing(path: &Path) -> Result<(), SamplerError> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("stage");
+
+    let backups = dir.join("backups");
+    std::fs::create_dir_all(&backups)?;
+
+    // Timestamped name; bump a counter on the (real-world impossible, but cheap to guard)
+    // chance two backups land in the same millisecond, so we never clobber a backup.
+    let ts = backup_timestamp();
+    let mut dest = backups.join(format!("{stem}-{ts}.bin"));
+    let mut n = 1;
+    while dest.exists() {
+        dest = backups.join(format!("{stem}-{ts}-{n}.bin"));
+        n += 1;
+    }
+    std::fs::rename(path, dest)?;
+    Ok(())
+}
+
+/// Milliseconds since the Unix epoch, for unique, chronologically-sortable backup names.
+fn backup_timestamp() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{backup_existing, backup_timestamp};
+    use std::fs;
+
+    #[test]
+    fn backup_preserves_previous_passes() {
+        let dir = std::env::temp_dir()
+            .join(format!("snout_backup_{}_{}", std::process::id(), backup_timestamp()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("squint.bin");
+        let backups = dir.join("backups");
+
+        // nothing to back up yet -> no-op, no backups dir created.
+        backup_existing(&path).unwrap();
+        assert!(!backups.exists());
+
+        // first re-record: the existing bin is moved aside.
+        fs::write(&path, b"pass-1").unwrap();
+        backup_existing(&path).unwrap();
+        assert!(!path.exists(), "current bin should be moved out");
+        assert_eq!(fs::read_dir(&backups).unwrap().count(), 1);
+
+        // second re-record: previous pass is *also* kept (not clobbered).
+        fs::write(&path, b"pass-2").unwrap();
+        backup_existing(&path).unwrap();
+        assert_eq!(fs::read_dir(&backups).unwrap().count(), 2);
+
+        fs::remove_dir_all(&dir).ok();
     }
 }

@@ -5,3 +5,4 @@ oldFaceModel.onnx
 user_cal.bin
 snout-gui/build
 snout-gui/.cache
+/overlay

@@ -283,9 +283,6 @@ model = "faceModel.onnx" # If not specified, tracking will be disabled.
 # lower = 0.0
 # upper = 1.0
 
-[train]
-baseline = "eyeModel.safetensors"
-
 [sample.overlay]
 path = "/your/path/to/BabbleCalibration.x86_64"
 mode = "Debug" # Can be: Debug, OpenVr, OpenXr

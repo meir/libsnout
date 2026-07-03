@@ -67,7 +67,6 @@ pub fn load(path: impl AsRef<Path>) -> Result<Config, ConfigError> {
     config.libonnxruntime = config.libonnxruntime.map(|p| resolve_path(base, p));
     config.eye.model = config.eye.model.map(|p| resolve_path(base, p));
     config.face.model = config.face.model.map(|p| resolve_path(base, p));
-    config.train.baseline = resolve_path(base, config.train.baseline);
 
     Ok(config)
 }
@@ -85,7 +84,6 @@ pub struct Config {
 
     pub eye: EyesConfig,
     pub face: FaceConfig,
-    pub train: TrainConfig,
 
     #[serde(default)]
     pub sample: Option<SampleConfig>,
@@ -123,11 +121,6 @@ pub struct FaceConfig {
 
     #[serde(default)]
     pub calibration: Vec<FaceShapeCalibration>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TrainConfig {
-    pub baseline: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

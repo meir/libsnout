@@ -68,12 +68,18 @@ impl BabbleEmitter {
     }
 
     pub fn process_eyes(&mut self, weights: &Weights<EyeShape>, transport: &mut OscTransport) {
-        let _ = (weights, transport);
+        for (shape, value) in weights.iter() {
+            let msg = OscMessage {
+                addr: shape.to_babble().to_string(),
+                args: vec![OscType::Float(value)],
+            };
+
+            transport.send(msg);
+        }
     }
 }
 
 pub struct EtvrEmitter {
-    // TODO
 }
 
 impl EtvrEmitter {
@@ -84,9 +90,10 @@ impl EtvrEmitter {
     pub fn process_eyes(&mut self, weights: &Weights<EyeShape>, transport: &mut OscTransport) {
         for (shape, value) in weights.iter() {
             let value = shape.to_etvr_value(value);
+            let Some(addr) = shape.to_etvr() else { continue };
 
             let msg = OscMessage {
-                addr: shape.to_etvr().to_string(),
+                addr: addr.to_string(),
                 args: vec![OscType::Float(value)],
             };
 
@@ -125,7 +132,7 @@ impl VrchatEmitter {
 
         let eye_tracking_msg = OscMessage {
             addr: "/tracking/eye/LeftRightPitchYaw".to_string(),
-            args: vec![OscType::Float(left_pitch),OscType::Float(left_yaw),OscType::Float(right_pitch),OscType::Float(right_yaw)],
+            args: vec![OscType::Float(-left_pitch),OscType::Float(left_yaw),OscType::Float(-right_pitch),OscType::Float(right_yaw)],
         };
 
         transport.send(eyes_closed_msg);

@@ -1,0 +1,22 @@
+[package]
+name = "snout-train"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+snout-sample-file = { path = "../snout-sample-file" }
+burn = { version = "0.21.0", features = ["dataset", "autodiff", "store"] }
+burn-store = { version = "0.21.0" }
+mobilenetv4-burn = { path = "../mobilenetv4-burn" }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+imageproc = { version = "0.26", default-features = false }
+rand = "0.8"
+onnx-rs = "0.1.2"
+
+[dev-dependencies]
+burn = { version = "0.21.0", features = ["ndarray", "autodiff"] }
+
+[features]
+wgpu-vulkan = ["burn/wgpu", "burn/vulkan", "burn/autotune", "burn/fusion"]
+torch-cpu = ["burn/tch"]
+torch-cuda = ["burn/tch"]

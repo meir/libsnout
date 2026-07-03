@@ -8,14 +8,39 @@ use super::internal::packet::{
     RunFixedLengthRoutinePacket, RunVariableLengthRoutinePacket,
 };
 
+#[derive(Copy, Clone)]
 pub enum Routine {
     GazeTutorial, // 30s
     ShortGazeTutorial, // 5s
     Gaze(Duration),
+    GazeExprTutorial, // 10s
+    FreeExpr(Duration),
     BlinkTutorial, // 10s
     ShortBlinkTutorial, // 4s
     Blink(Duration),
+    WidenTutorial, // 10s
+    Widen(Duration),
+    SquintTutorial, // 10s
+    Squint(Duration),
+    BrowTutorial, // 10s
+    Brow(Duration),
     Trainer,
+}
+
+impl Routine {
+    pub fn is_tutorial(self) -> bool {
+        match self {
+            Self::GazeTutorial => true,
+            Self::ShortGazeTutorial => true,
+            Self::GazeExprTutorial => true,
+            Self::BlinkTutorial => true,
+            Self::ShortBlinkTutorial => true,
+            Self::WidenTutorial => true,
+            Self::SquintTutorial => true,
+            Self::BrowTutorial => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -69,9 +94,17 @@ impl Overlay {
             Routine::GazeTutorial => ("gazetutorial", Duration::from_secs(30)),
             Routine::ShortGazeTutorial => ("gazetutorialshort", Duration::from_secs(5)),
             Routine::Gaze(d) => ("gaze", d),
+            Routine::GazeExprTutorial => ("gazeexprtutorial", Duration::from_secs(10)),
+            Routine::FreeExpr(d) => ("gazeexpr", d),
             Routine::BlinkTutorial => ("blinktutorial", Duration::from_secs(10)),
             Routine::ShortBlinkTutorial => ("blinktutorial", Duration::from_secs(4)),
             Routine::Blink(d) => ("blink", d),
+            Routine::WidenTutorial => ("widentutorial", Duration::from_secs(10)),
+            Routine::Widen(d) => ("widen", d),
+            Routine::SquintTutorial => ("squinttutorial", Duration::from_secs(10)),
+            Routine::Squint(d) => ("squint", d),
+            Routine::BrowTutorial => ("browtutorial", Duration::from_secs(10)),
+            Routine::Brow(d) => ("brow", d),
             Routine::Trainer => ("trainer", Duration::from_secs(120)),
         };
 

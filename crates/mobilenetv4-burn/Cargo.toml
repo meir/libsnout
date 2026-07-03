@@ -1,0 +1,13 @@
+[package]
+name = "mobilenetv4-burn"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "MobileNetV4 (conv_small) implementation in Burn (vendored for snout-train)"
+
+[dependencies]
+burn = { version = "0.21.0", default-features = false }
+
+[dev-dependencies]
+burn = { version = "0.21.0", default-features = false, features = ["ndarray", "std"] }
+burn-store = "0.21.0"

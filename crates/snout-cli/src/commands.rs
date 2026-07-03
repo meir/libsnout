@@ -3,12 +3,10 @@ mod track;
 use std::{io::Write, path::PathBuf};
 
 use snout::{
-    cancel::Cancel,
     capture::discovery::query_cameras,
     config::Config,
-    sample::sampler::LongSampler,
+    sample::sampler::{LongSampler, Stage},
     track::{eye::EyeTracker, face::FaceTracker, initialize_runtime},
-    train::Progress,
 };
 
 pub use track::TrackCommand;
@@ -30,41 +28,56 @@ impl ListCamerasCommand {
     }
 }
 
+/// Trains the MobileNetV4-based dual-eye model (gaze + expression) and exports ONNX.
 pub struct TrainCommand {
     source: PathBuf,
     destination: PathBuf,
-    baseline: PathBuf,
 }
 
 impl TrainCommand {
-    pub fn new(source: PathBuf, destination: PathBuf, baseline: PathBuf) -> Self {
+    pub fn new(source: PathBuf, destination: PathBuf) -> Self {
         Self {
             source,
             destination,
-            baseline,
         }
     }
 
     pub fn run(&self) {
-        println!("Training eye model...");
-        let mut trainer = snout::train::Trainer::new(&self.source, &self.baseline).unwrap();
-        trainer.on_progress(print_progress);
-        trainer.train(&self.destination, Cancel::never()).unwrap();
-        println!("wrote: {}", self.destination.display());
-        println!("training completed successfully.");
+        use snout_train::train::Trainer;
+        use snout_train::{TrainBackend, default_device};
+
+        println!("Training dual-eye model...");
+        let device = default_device();
+        let result = Trainer::<TrainBackend>::new(device)
+            .on_progress(print_progress)
+            .train_to_onnx(&self.source, &self.destination);
+
+        match result {
+            Ok(()) => {
+                println!();
+                println!("wrote: {}", self.destination.display());
+                println!("training completed successfully.");
+            }
+            Err(e) => {
+                eprintln!("\ntraining failed: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
-fn print_progress(p: Progress) {
-    let line = format!(
-        "epoch {:>2}/{:<2}  batch {:>4}/{:<4}  loss {:.5}",
-        p.current_epoch, p.total_epochs, p.current_batch, p.total_batches, p.loss,
-    );
-    if p.current_batch == p.total_batches {
-        // End of epoch — clear the in-place line and print with newline.
-        println!("\r{line}");
+fn print_progress(p: snout_train::train::Progress) {
+    if let Some(val) = p.val {
+        println!(
+            "\r{:<4}  step {:>5}/{:<5}  loss {:.5}   val_mse {:.5}  r[lid={:.2} widen={:.2} squint={:.2} brow={:.2}]",
+            p.phase, p.step, p.total_steps, p.loss,
+            val.mse, val.corr[0], val.corr[1], val.corr[2], val.corr[3],
+        );
     } else {
-        print!("\r{line}");
+        print!(
+            "\r{:<4}  step {:>5}/{:<5}  loss {:.5}    ",
+            p.phase, p.step, p.total_steps, p.loss,
+        );
         let _ = std::io::stdout().flush();
     }
 }
@@ -149,11 +162,16 @@ impl CaptureCommand {
 pub struct SampleCommand {
     config: Config,
     output: PathBuf,
+    stages: Vec<Stage>,
 }
 
 impl SampleCommand {
-    pub fn new(config: Config, output: PathBuf) -> Self {
-        Self { config, output }
+    pub fn new(config: Config, output: PathBuf, stages: Vec<Stage>) -> Self {
+        Self {
+            config,
+            output,
+            stages,
+        }
     }
 
     pub fn run(&self) {
@@ -162,8 +180,14 @@ impl SampleCommand {
         let mut sampler = LongSampler::with_config(&cameras, &self.config)
             .expect("failed to create sampler");
 
-        println!("Starting calibration...");
-        sampler.run(&self.output).expect("sampling failed");
+        if self.stages.is_empty() {
+            println!("Starting full calibration...");
+        } else {
+            let names: Vec<_> = self.stages.iter().map(|s| s.file_name()).collect();
+            println!("Recording stage(s): {}", names.join(", "));
+        }
+
+        sampler.run(&self.output, &self.stages).expect("sampling failed");
         println!("Done. Written to {}", self.output.display());
     }
 }

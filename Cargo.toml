@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/snout-cli"]
+members = ["crates/mobilenetv4-burn", "crates/snout-cli", "crates/snout-sample-file", "crates/snout-train"]
 
 [package]
 name = "snout"
@@ -12,22 +12,19 @@ imageproc = { version = "0.26.1", default-features = false }
 rosc = "0.11.4"
 thiserror = "2.0.18"
 v4l = "0.14.0"
-burn = { version = "0.21.0-pre.3", features = ["store", "wgpu", "autodiff", "dataset"] }
-burn-store = "=0.21.0-pre.3"
 byteorder = "1.5.0"
+snout-sample-file = { path = "crates/snout-sample-file" }
 rand = "0.8"
 tracing = "0.1"
-onnx-rs = "0.1.2"
-safetensors = "0.7.0"
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["api-20", "cuda", "load-dynamic", "ndarray", "tracing"] }
-serde = "1.0.228"
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0"
 toml = "1.1.2"
 ndarray = "0.17.2"
 ureq = { version = "3.3.0", default-features = false }
 
-[build-dependencies]
-burn-onnx = { version = "0.21.0-pre.3" }
-
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
+
+[profile.release]
+lto = "thin"

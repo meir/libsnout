@@ -7,9 +7,15 @@ pub enum EyeShape {
     LeftEyePitch,
     LeftEyeYaw,
     LeftEyeLid,
+    LeftEyeWiden,
+    LeftEyeBrow,
+    LeftEyeSquint,
     RightEyePitch,
     RightEyeYaw,
     RightEyeLid,
+    RightEyeWiden,
+    RightEyeBrow,
+    RightEyeSquint,
 }
 
 impl From<EyeShape> for usize {
@@ -29,20 +35,20 @@ impl From<usize> for EyeShape {
 impl Shape for EyeShape {
     fn count() -> usize {
         const {
-            assert!(Self::RightEyeLid as usize + 1 == 6);
+            assert!(Self::RightEyeSquint as usize + 1 == 12);
         }
 
-        Self::RightEyeLid as usize + 1
+        Self::RightEyeSquint as usize + 1
     }
 }
 
 impl EyeShape {
     pub const fn count() -> usize {
         const {
-            assert!(Self::RightEyeLid as usize + 1 == 6);
+            assert!(Self::RightEyeSquint as usize + 1 == 12);
         }
 
-        Self::RightEyeLid as usize + 1
+        Self::RightEyeSquint as usize + 1
     }
 
     pub fn from_model_name(name: &str) -> Option<Self> {
@@ -50,29 +56,48 @@ impl EyeShape {
             "rightEyeY" => Some(Self::RightEyePitch),
             "rightEyeX" => Some(Self::RightEyeYaw),
             "rightEyeLid" => Some(Self::RightEyeLid),
+            "rightEyeWiden" => Some(Self::RightEyeWiden),
+            "rightEyeBrow" => Some(Self::RightEyeBrow),
+            "rightEyeSquint" => Some(Self::RightEyeSquint),
+
             "leftEyeY" => Some(Self::LeftEyePitch),
             "leftEyeX" => Some(Self::LeftEyeYaw),
             "leftEyeLid" => Some(Self::LeftEyeLid),
-            // leftEyeWiden
-            // rightEyeWiden
-            // leftEyeSquint
-            // rightEyeSquint
-            // LeftEyeBrow
-            // RightEyeBrow
-            // LeftEyeLower
-            // RightEyeLower
+            "leftEyeWiden" => Some(Self::LeftEyeWiden),
+            "leftEyeBrow" => Some(Self::LeftEyeBrow),
+            "leftEyeSquint" => Some(Self::LeftEyeSquint),
             _ => None,
         }
     }
 
-    pub(crate) fn to_etvr(self) -> &'static str {
+    pub(crate) fn to_etvr(self) -> Option<&'static str> {
         match self {
-            Self::LeftEyePitch => "/avatar/parameters/v2/EyeLeftX",
-            Self::LeftEyeYaw => "/avatar/parameters/v2/EyeLeftY",
-            Self::LeftEyeLid => "/avatar/parameters/v2/EyeLidLeft",
-            Self::RightEyePitch => "/avatar/parameters/v2/EyeRightX",
-            Self::RightEyeYaw => "/avatar/parameters/v2/EyeRightY",
-            Self::RightEyeLid => "/avatar/parameters/v2/EyeLidRight",
+            Self::LeftEyePitch => Some("/avatar/parameters/v2/EyeLeftY"),
+            Self::LeftEyeYaw => Some("/avatar/parameters/v2/EyeLeftX"),
+            Self::LeftEyeLid => Some("/avatar/parameters/v2/EyeLidLeft"),
+
+            Self::RightEyePitch => Some("/avatar/parameters/v2/EyeRightY"),
+            Self::RightEyeYaw => Some("/avatar/parameters/v2/EyeRightX"),
+            Self::RightEyeLid => Some("/avatar/parameters/v2/EyeLidRight"),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn to_babble(self) -> &'static str {
+        match self {
+            Self::LeftEyePitch => "/leftEyeY",
+            Self::LeftEyeYaw => "/leftEyeX",
+            Self::LeftEyeLid => "/leftEyeLid",
+            Self::LeftEyeWiden => "/leftEyeWiden",
+            Self::LeftEyeBrow => "/leftEyeBrow",
+            Self::LeftEyeSquint => "/leftEyeSquint",
+
+            Self::RightEyePitch => "/rightEyeY",
+            Self::RightEyeYaw => "/rightEyeX",
+            Self::RightEyeLid => "/rightEyeLid",
+            Self::RightEyeWiden => "/rightEyeWiden",
+            Self::RightEyeBrow => "/rightEyeBrow",
+            Self::RightEyeSquint => "/rightEyeSquint",
         }
     }
 
@@ -161,12 +186,36 @@ impl EyeCalibrator {
             right_eye_yaw_corrected = average_yaw + convergence;
         }
 
-        self.weights.set(EyeShape::LeftEyePitch, right_eye_yaw_corrected);
-        self.weights.set(EyeShape::LeftEyeYaw, eye_y);
-        self.weights.set(EyeShape::LeftEyeLid, self.bounds[EyeShape::RightEyeLid as usize].remap(right_lid));
+        self.weights.set(EyeShape::LeftEyeYaw, left_eye_yaw_corrected);
+        self.weights.set(EyeShape::LeftEyePitch, eye_y);
+        self.weights.set(EyeShape::LeftEyeLid, self.bounds[EyeShape::LeftEyeLid as usize].remap(left_lid));
 
-        self.weights.set(EyeShape::RightEyePitch, left_eye_yaw_corrected);
-        self.weights.set(EyeShape::RightEyeYaw, eye_y);
-        self.weights.set(EyeShape::RightEyeLid, self.bounds[EyeShape::LeftEyeLid as usize].remap(left_lid));
+        self.weights.set(EyeShape::RightEyeYaw, right_eye_yaw_corrected);
+        self.weights.set(EyeShape::RightEyePitch, eye_y);
+        self.weights.set(EyeShape::RightEyeLid, self.bounds[EyeShape::RightEyeLid as usize].remap(right_lid));
+
+        if let Some(left_eye_widen) = raw.get(EyeShape::LeftEyeWiden) {
+            self.weights.set(EyeShape::LeftEyeWiden, left_eye_widen);
+        }
+
+        if let Some(right_eye_widen) = raw.get(EyeShape::RightEyeWiden) {
+            self.weights.set(EyeShape::RightEyeWiden, right_eye_widen);
+        }
+
+        if let Some(left_eye_brow) = raw.get(EyeShape::LeftEyeBrow) {
+            self.weights.set(EyeShape::LeftEyeBrow, left_eye_brow);
+        }
+
+        if let Some(right_eye_brow) = raw.get(EyeShape::RightEyeBrow) {
+            self.weights.set(EyeShape::RightEyeBrow, right_eye_brow);
+        }
+
+        if let Some(left_eye_squint) = raw.get(EyeShape::LeftEyeSquint) {
+            self.weights.set(EyeShape::LeftEyeSquint, left_eye_squint);
+        }
+
+        if let Some(right_eye_squint) = raw.get(EyeShape::RightEyeSquint) {
+            self.weights.set(EyeShape::RightEyeSquint, right_eye_squint);
+        }
     }
 }

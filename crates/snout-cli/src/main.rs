@@ -6,7 +6,9 @@ use std::process;
 use clap::{Parser, Subcommand, ValueEnum};
 use tracing_subscriber::EnvFilter;
 
-use crate::commands::{CaptureCommand, ListCamerasCommand, SampleCommand, TrackCommand, TrainCommand};
+use crate::commands::{
+    CaptureCommand, ListCamerasCommand, SampleCommand, TrackCommand, TrainCommand,
+};
 
 fn main() {
     let cli = Args::parse();
@@ -35,13 +37,17 @@ fn main() {
         Commands::Train {
             source,
             destination,
-        } => TrainCommand::new(source, destination, config.train.baseline).run(),
+        } => TrainCommand::new(source, destination).run(),
         Commands::Track { eye_debug } => TrackCommand::new(config, eye_debug).run(),
         Commands::Capture {
             source,
             destination,
         } => CaptureCommand::new(config, source, destination).run(),
-        Commands::Sample { output } => SampleCommand::new(config, output).run(),
+        Commands::Sample { output, stage } => {
+            let stages: Vec<snout::sample::sampler::Stage> =
+                stage.into_iter().map(Into::into).collect();
+            SampleCommand::new(config, output, stages).run()
+        }
     }
 }
 
@@ -67,6 +73,31 @@ enum CaptureSource {
     Face,
 }
 
+/// A single calibration pass, for `sample --stage`.
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum Stage {
+    Gaze,
+    FreeExpr,
+    Blink,
+    Widen,
+    Squint,
+    Brow,
+}
+
+impl From<Stage> for snout::sample::sampler::Stage {
+    fn from(stage: Stage) -> Self {
+        use snout::sample::sampler::Stage as S;
+        match stage {
+            Stage::Gaze => S::Gaze,
+            Stage::FreeExpr => S::FreeExpr,
+            Stage::Blink => S::Blink,
+            Stage::Widen => S::Widen,
+            Stage::Squint => S::Squint,
+            Stage::Brow => S::Brow,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// List all available cameras.
@@ -77,10 +108,10 @@ enum Commands {
         #[arg(value_name = "output.jpeg")]
         destination: PathBuf,
     },
-    /// Train the eye model based on the captured samples.
+    /// Train the MobileNetV4 dual-eye model (gaze + expression) and export ONNX.
     Train {
-        /// A file containing samples for training.
-        #[arg(value_name = "user_cal.bin")]
+        /// A capture `.bin` file or a session directory (e.g. from `sample`).
+        #[arg(value_name = "capture")]
         source: PathBuf,
         /// A destination `onnx` file.
         #[arg(value_name = "output.onnx")]
@@ -91,10 +122,13 @@ enum Commands {
         #[arg(long)]
         eye_debug: bool,
     },
-    /// Run calibration sampling.
+    /// Run calibration sampling into a session directory.
     Sample {
-        /// Output path for the calibration data.
-        #[arg(short, long, default_value = "user_cal.bin")]
+        /// Output session directory.
+        #[arg(short, long, default_value = "my_session")]
         output: PathBuf,
+        /// Record only these stage(s); omit to record the full session.
+        #[arg(short, long, value_enum)]
+        stage: Vec<Stage>,
     },
 }
