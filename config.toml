@@ -1,4 +1,9 @@
+#
+# Documentation on how to configure libsnout can be found under CONFIGURING.md
+#
+
 #libonnxruntime = "/usr/lib64/libonnxruntime.so"
+#interval = 10 # In milliseconds
 
 [eye]
 #link = true
@@ -57,6 +62,10 @@ model = "faceModel.onnx" # If not specified, tracking will be disabled.
 #brightness = 0.66
 #vertical_flip = false
 #horizontal_flip = false
+
+#[face.gc0308]
+#exposure = 384 # 0-4095
+#gain = 16      # 0-255
 
 # [[face.calibration]]
 # shape = "CheekPuffLeft"
@@ -283,8 +292,9 @@ model = "faceModel.onnx" # If not specified, tracking will be disabled.
 # lower = 0.0
 # upper = 1.0
 
-[train]
-baseline = "eyeModel.safetensors"
+[sample.overlay]
+path = "/your/path/to/BabbleCalibration.x86_64"
+mode = "Debug" # Can be: Debug, OpenVr, OpenXr
 
 #[output.osc]
 #destination = "127.0.0.1:9400" # Set this to 127.0.0.1:8888 if you use VRCFT.Avalonia.
@@ -292,7 +302,7 @@ baseline = "eyeModel.safetensors"
 # Enable VRChat native OSC eye tracking.
 # By default this output is disabled.
 # See https://docs.vrchat.com/docs/osc-eye-tracking for more information.
-#[output.vrchat]
-#destination = "127.0.0.1:9000"
+[output.vrchat]
+destination = "127.0.0.1:9000"
 #max_pitch = 20.0 # Optional
 #max_yaw = 30.0 # Optional

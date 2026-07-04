@@ -10,13 +10,25 @@ use crate::{
             one_euro_filter::OneEuroFilter,
         },
     },
+    weights::Weights,
 };
+
+const LEGACY_OUTPUT_MAP: [Option<EyeShape>; 6] = [
+    Some(EyeShape::LeftEyePitch),
+    Some(EyeShape::LeftEyeYaw),
+    Some(EyeShape::LeftEyeLid),
+    Some(EyeShape::RightEyePitch),
+    Some(EyeShape::RightEyeYaw),
+    Some(EyeShape::RightEyeLid),
+];
 
 pub struct EyePipeline {
     transfer: FrameToBurnTensor,
     inference: Option<EyeInference>,
     collector: EyeCompositor,
     filter: OneEuroFilter,
+    weights: Weights<EyeShape>,
+    output_map: Vec<Option<EyeShape>>,
 }
 
 impl EyePipeline {
@@ -26,14 +38,36 @@ impl EyePipeline {
             inference: None,
             collector: EyeCompositor::new(),
             filter: OneEuroFilter::new(EyeShape::count()),
+            weights: Weights::new(),
+            output_map: LEGACY_OUTPUT_MAP.to_vec(),
         }
     }
 
     pub fn set_model(&mut self, path: Option<impl AsRef<Path>>) -> Result<(), PipelineError> {
         if let Some(path) = path {
-            self.inference = Some(EyeInference::new(path)?);
+            let inference = EyeInference::new(path)?;
+
+            let output_map = match &inference.output_names {
+                Some(names) => names.iter().map(|n| EyeShape::from_model_name(n)).collect(),
+                None => {
+                    if inference.output_count() != LEGACY_OUTPUT_MAP.len() {
+                        tracing::warn!(
+                            output_count = inference.output_count(),
+                            "using legacy output map on incompatible model",
+                        );
+                    }
+                    tracing::info!("using legacy output map");
+                    LEGACY_OUTPUT_MAP.to_vec()
+                }
+            };
+
+            self.filter = OneEuroFilter::new(inference.output_count());
+            self.output_map = output_map;
+            self.inference = Some(inference);
         } else {
             self.inference = None;
+            self.output_map = LEGACY_OUTPUT_MAP.to_vec();
+            self.filter = OneEuroFilter::new(EyeShape::count());
         }
 
         Ok(())
@@ -47,7 +81,7 @@ impl EyePipeline {
         self.filter.parameters = parameters;
     }
 
-    pub fn run(&mut self, left: &Frame, right: &Frame) -> Result<Option<&[f32]>, PipelineError> {
+    pub fn run(&mut self, left: &Frame, right: &Frame) -> Result<Option<&Weights<EyeShape>>, PipelineError> {
         let Some(inference) = self.inference.as_mut() else {
             return Ok(None);
         };
@@ -60,9 +94,10 @@ impl EyePipeline {
             .transfer_composite(mat, &mut inference.input_tensor);
 
         let weights = inference.run()?;
-
         let filtered_weights = self.filter.filter(&weights);
 
-        Ok(Some(filtered_weights))
+        self.weights.fill_with(filtered_weights, &self.output_map);
+
+        Ok(Some(&self.weights))
     }
 }

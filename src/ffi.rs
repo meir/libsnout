@@ -4,8 +4,9 @@ use std::sync::Mutex;
 use std::{cell::RefCell, os::raw::c_char};
 
 use crate::calibration::{
-    Bounds, EyeCalibrator, EyeShape, FaceShape, ManualFaceCalibrator, Weights,
+    Bounds, EyeCalibrator, EyeShape, FaceShape, ManualFaceCalibrator,
 };
+use crate::weights::Weights;
 use crate::capture::processing::Crop;
 use crate::capture::{
     CameraError, MonoCamera,
@@ -667,7 +668,7 @@ pub extern "C" fn snout_frame_preprocessor_process(
     }
 }
 
-/// The number of face shape weights returned by [`snout_face_pipeline_run`].
+/// The number of face shapes.
 #[unsafe(no_mangle)]
 pub static SNOUT_FACE_SHAPE_COUNT: usize = 45;
 
@@ -763,20 +764,19 @@ pub extern "C" fn snout_face_pipeline_set_filter(
 
 /// Run the face pipeline on a frame.
 ///
-/// Returns a pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats.
-/// The returned array can be indexed using the [`FaceShape`] enum variants cast to an integer.
-///
-/// A returned null either indicates an error, or that the pipeline was not ready yet.
-/// Check [`snout_get_last_error`] to determine which.
-/// It will be `SnoutError_Ok` if the pipeline was not ready yet.
+/// Returns a pointer to a `Weights<FaceShape>`, or null if the pipeline
+/// was not ready yet or an error occurred.
 ///
 /// The returned pointer is valid until the next call to [`snout_face_pipeline_run`]
 /// or [`snout_face_pipeline_free`].
+///
+/// Check [`snout_get_last_error`] to determine which.
+/// It will be `SnoutError_Ok` if the pipeline was not ready yet.
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_face_pipeline_run(
     pipeline: *mut FacePipeline,
     frame: *const Frame,
-) -> *const f32 {
+) -> *const Weights<FaceShape> {
     clear_last_error();
 
     if pipeline.is_null() || frame.is_null() {
@@ -788,7 +788,7 @@ pub extern "C" fn snout_face_pipeline_run(
     let frame = unsafe { &*frame };
 
     match pipeline.run(frame) {
-        Ok(Some(weights)) => weights.as_ptr(),
+        Ok(Some(weights)) => weights,
         Ok(None) => std::ptr::null(),
         Err(e) => {
             set_last_error(e);
@@ -811,7 +811,7 @@ pub extern "C" fn snout_face_pipeline_free(pipeline: *mut FacePipeline) {
     }
 }
 
-/// The number of eye shape weights returned by [`snout_eye_pipeline_run`].
+/// The number of eye shapes.
 #[unsafe(no_mangle)]
 pub static SNOUT_EYE_SHAPE_COUNT: usize = 6;
 
@@ -904,21 +904,20 @@ pub extern "C" fn snout_eye_pipeline_set_filter(
 
 /// Run the eye pipeline on a pair of stereo frames.
 ///
-/// Returns a pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats.
-/// The returned array can be indexed using the [`EyeShape`] enum variants cast to an integer.
-///
-/// A returned null either indicates an error, or that the pipeline was not ready yet.
-/// Check [`snout_last_error`] to determine which.
-/// It will be `SnoutError_Ok` if the pipeline was not ready yet.
+/// Returns a pointer to a `Weights<EyeShape>`, or null if the pipeline
+/// was not ready yet or an error occurred.
 ///
 /// The returned pointer is valid until the next call to [`snout_eye_pipeline_run`]
 /// or [`snout_eye_pipeline_free`].
+///
+/// Check [`snout_last_error`] to determine which.
+/// It will be `SnoutError_Ok` if the pipeline was not ready yet.
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_eye_pipeline_run(
     pipeline: *mut EyePipeline,
     left: *const Frame,
     right: *const Frame,
-) -> *const f32 {
+) -> *const Weights<EyeShape> {
     clear_last_error();
 
     if pipeline.is_null() || left.is_null() || right.is_null() {
@@ -931,7 +930,7 @@ pub extern "C" fn snout_eye_pipeline_run(
     let right = unsafe { &*right };
 
     match pipeline.run(left, right) {
-        Ok(Some(weights)) => weights.as_ptr(),
+        Ok(Some(weights)) => weights,
         Ok(None) => std::ptr::null(),
         Err(e) => {
             set_last_error(e);
@@ -1001,18 +1000,15 @@ pub extern "C" fn snout_face_calibrator_set_bounds(
 
 /// Calibrate raw face weights.
 ///
-/// `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
-///
-/// Returns a pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats, or null if an error occurred.
-/// The returned slice can be indexed using the [`FaceShape`] enum variants cast to an integer.
+/// Returns a pointer to calibrated `Weights<FaceShape>`, or null if an error occurred.
 ///
 /// The returned pointer is valid until the next call to [`snout_face_calibrator_calibrate`]
 /// or [`snout_face_calibrator_free`].
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_face_calibrator_calibrate(
     calibrator: *mut ManualFaceCalibrator,
-    weights: *const f32,
-) -> *const f32 {
+    weights: *const Weights<FaceShape>,
+) -> *const Weights<FaceShape> {
     clear_last_error();
 
     if calibrator.is_null() || weights.is_null() {
@@ -1021,12 +1017,10 @@ pub extern "C" fn snout_face_calibrator_calibrate(
     }
 
     let calibrator = unsafe { &mut *calibrator };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_FACE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
 
-    calibrator.calibrate(weights).as_ptr()
+    calibrator.calibrate(weights)
 }
-
-/// Free the face calibrator.
 ///
 /// Does nothing if the pointer is null.
 #[unsafe(no_mangle)]
@@ -1122,18 +1116,15 @@ pub extern "C" fn snout_eye_calibrator_set_link_eyes(
 
 /// Calibrate raw eye weights.
 ///
-/// `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
-///
-/// Returns a pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats, or null if an error occurred.
-/// The returned slice can be indexed using the [`EyeShape`] enum.
+/// Returns a pointer to calibrated `Weights<EyeShape>`, or null if an error occurred.
 ///
 /// The returned pointer is valid until the next call to [`snout_eye_calibrator_calibrate`]
 /// or [`snout_eye_calibrator_free`].
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_eye_calibrator_calibrate(
     calibrator: *mut EyeCalibrator,
-    weights: *const f32,
-) -> *const f32 {
+    weights: *const Weights<EyeShape>,
+) -> *const Weights<EyeShape> {
     clear_last_error();
 
     if calibrator.is_null() || weights.is_null() {
@@ -1142,9 +1133,9 @@ pub extern "C" fn snout_eye_calibrator_calibrate(
     }
 
     let calibrator = unsafe { &mut *calibrator };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_EYE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
 
-    calibrator.calibrate(weights).as_ptr()
+    calibrator.calibrate(weights)
 }
 
 /// Free the eye calibrator.
@@ -1170,8 +1161,8 @@ pub struct SnoutFaceReport {
     pub raw_frame: *const Frame,
     /// The frame after preprocessing.
     pub processed_frame: *const Frame,
-    /// A pointer to [`SNOUT_FACE_SHAPE_COUNT`] floats.
-    pub weights: *const f32,
+    /// A pointer to the weights.
+    pub weights: *const Weights<FaceShape>,
 }
 
 impl SnoutFaceReport {
@@ -1300,7 +1291,7 @@ pub extern "C" fn snout_face_tracker_track(tracker: *mut FaceTracker) -> SnoutFa
         Ok(Some(report)) => SnoutFaceReport {
             raw_frame: report.raw_frame,
             processed_frame: report.processed_frame,
-            weights: report.weights.as_ptr(),
+            weights: report.weights as *const Weights<FaceShape>,
         },
         Ok(None) => SnoutFaceReport::null(),
         Err(e) => {
@@ -1420,12 +1411,10 @@ pub extern "C" fn snout_babble_emitter_free(emitter: *mut BabbleEmitter) {
 }
 
 /// Send face weights via the Babble protocol.
-///
-/// `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_babble_emitter_process_face(
     emitter: *mut BabbleEmitter,
-    weights: *const f32,
+    weights: *const Weights<FaceShape>,
     transport: *mut OscTransport,
 ) {
     clear_last_error();
@@ -1436,10 +1425,10 @@ pub extern "C" fn snout_babble_emitter_process_face(
     }
 
     let emitter = unsafe { &mut *emitter };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_FACE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
     let transport = unsafe { &mut *transport };
 
-    emitter.process_face(Weights::new(weights), transport);
+    emitter.process_face(weights, transport);
 }
 
 /// Create a new ETVR emitter.
@@ -1465,12 +1454,10 @@ pub extern "C" fn snout_etvr_emitter_free(emitter: *mut EtvrEmitter) {
 }
 
 /// Send eye weights via the ETVR protocol.
-///
-/// `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
 #[unsafe(no_mangle)]
 pub extern "C" fn snout_etvr_emitter_process_eyes(
     emitter: *mut EtvrEmitter,
-    weights: *const f32,
+    weights: *const Weights<EyeShape>,
     transport: *mut OscTransport,
 ) {
     clear_last_error();
@@ -1481,10 +1468,10 @@ pub extern "C" fn snout_etvr_emitter_process_eyes(
     }
 
     let emitter = unsafe { &mut *emitter };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_EYE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
     let transport = unsafe { &mut *transport };
 
-    emitter.process_eyes(Weights::new(weights), transport);
+    emitter.process_eyes(weights, transport);
 }
 
 #[derive(Copy, Clone)]
@@ -1498,8 +1485,8 @@ pub struct SnoutEyeReport {
     pub left_processed_frame: *const Frame,
     /// The right frame after preprocessing.
     pub right_processed_frame: *const Frame,
-    /// A pointer to [`SNOUT_EYE_SHAPE_COUNT`] floats, or null during warmup.
-    pub weights: *const f32,
+    /// A pointer to the weights, or null during warmup.
+    pub weights: *const Weights<EyeShape>,
 }
 
 impl SnoutEyeReport {
@@ -1641,7 +1628,7 @@ pub extern "C" fn snout_eye_tracker_track(tracker: *mut EyeTracker) -> SnoutEyeR
             right_raw_frame: report.right_raw_frame,
             left_processed_frame: report.left_processed_frame,
             right_processed_frame: report.right_processed_frame,
-            weights: report.weights.as_ptr(),
+            weights: report.weights as *const Weights<EyeShape>,
         },
         Ok(None) => SnoutEyeReport::null(),
         Err(e) => {
@@ -1748,10 +1735,8 @@ pub extern "C" fn snout_output_set_destination(output: *mut Output, destination:
 }
 
 /// Send face weights via all enabled face emitters.
-///
-/// `weights` must point to [`SNOUT_FACE_SHAPE_COUNT`] floats.
 #[unsafe(no_mangle)]
-pub extern "C" fn snout_output_send_face(output: *mut Output, weights: *const f32) {
+pub extern "C" fn snout_output_send_face(output: *mut Output, weights: *const Weights<FaceShape>) {
     clear_last_error();
 
     if output.is_null() || weights.is_null() {
@@ -1760,16 +1745,14 @@ pub extern "C" fn snout_output_send_face(output: *mut Output, weights: *const f3
     }
 
     let output = unsafe { &mut *output };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_FACE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
 
-    output.send_face(Weights::new(weights));
+    output.send_face(weights);
 }
 
 /// Send eye weights via all enabled eye emitters.
-///
-/// `weights` must point to [`SNOUT_EYE_SHAPE_COUNT`] floats.
 #[unsafe(no_mangle)]
-pub extern "C" fn snout_output_send_eyes(output: *mut Output, weights: *const f32) {
+pub extern "C" fn snout_output_send_eyes(output: *mut Output, weights: *const Weights<EyeShape>) {
     clear_last_error();
 
     if output.is_null() || weights.is_null() {
@@ -1778,9 +1761,9 @@ pub extern "C" fn snout_output_send_eyes(output: *mut Output, weights: *const f3
     }
 
     let output = unsafe { &mut *output };
-    let weights = unsafe { std::slice::from_raw_parts(weights, SNOUT_EYE_SHAPE_COUNT) };
+    let weights = unsafe { &*weights };
 
-    output.send_eyes(Weights::new(weights));
+    output.send_eyes(weights);
 }
 
 /// Flush the output transport.
@@ -1899,5 +1882,51 @@ pub extern "C" fn snout_config_free(config: *mut Config) {
 
     unsafe {
         drop(Box::from_raw(config));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn snout_eye_weights_get(
+    weights: *const Weights<EyeShape>,
+    shape: EyeShape,
+    out: *mut f32,
+) -> bool {
+    if weights.is_null() {
+        return false;
+    }
+
+    let weights = unsafe { &*weights };
+
+    match weights.get(shape) {
+        Some(value) => {
+            if !out.is_null() {
+                unsafe { *out = value };
+            }
+            true
+        }
+        None => false,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn snout_face_weights_get(
+    weights: *const Weights<FaceShape>,
+    shape: FaceShape,
+    out: *mut f32,
+) -> bool {
+    if weights.is_null() {
+        return false;
+    }
+
+    let weights = unsafe { &*weights };
+
+    match weights.get(shape) {
+        Some(value) => {
+            if !out.is_null() {
+                unsafe { *out = value };
+            }
+            true
+        }
+        None => false,
     }
 }

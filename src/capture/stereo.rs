@@ -28,6 +28,8 @@ impl StereoCamera {
         let width = left.width as u32;
         let height = left.height as u32;
 
+        tracing::debug!(width, height, "Opened stereo camera in dual mode");
+
         Ok(Self {
             device: StereoCameraDevice::Dual(left, right),
             left_frame: Frame::empty(width, height),
@@ -45,6 +47,8 @@ impl StereoCamera {
         let full_width = camera.width as u32;
         let height = camera.height as u32;
         let half_width = full_width / 2;
+
+        tracing::debug!(full_width, height, half_width, "Opened stereo camera in side-by-side mode");
 
         Ok(Self {
             device: StereoCameraDevice::Single(camera, sbs_buffer),

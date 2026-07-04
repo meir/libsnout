@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{calibration::FaceShape, capture::processing::{Crop, PreprocessConfig}, pipeline::FilterParameters};
+use crate::{calibration::FaceShape, capture::{processing::{Crop, PreprocessConfig}, sensor::Gc0308Config}, pipeline::FilterParameters};
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -67,7 +67,6 @@ pub fn load(path: impl AsRef<Path>) -> Result<Config, ConfigError> {
     config.libonnxruntime = config.libonnxruntime.map(|p| resolve_path(base, p));
     config.eye.model = config.eye.model.map(|p| resolve_path(base, p));
     config.face.model = config.face.model.map(|p| resolve_path(base, p));
-    config.train.baseline = resolve_path(base, config.train.baseline);
 
     Ok(config)
 }
@@ -82,10 +81,13 @@ pub struct FaceShapeCalibration {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub libonnxruntime: Option<PathBuf>,
+    pub interval: Option<u64>, // in ms
 
     pub eye: EyesConfig,
     pub face: FaceConfig,
-    pub train: TrainConfig,
+
+    #[serde(default)]
+    pub sample: Option<SampleConfig>,
 
     #[serde(default)]
     pub output: OutputConfig,
@@ -120,11 +122,29 @@ pub struct FaceConfig {
 
     #[serde(default)]
     pub calibration: Vec<FaceShapeCalibration>,
+
+    /// Manual GC0308 sensor controls, applied only if the face camera is a
+    /// GC0308 board. Left untouched when absent.
+    pub gc0308: Option<Gc0308Config>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TrainConfig {
-    pub baseline: PathBuf,
+pub struct SampleConfig {
+    pub overlay: OverlayConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct OverlayConfig {
+    pub path: PathBuf,
+    pub mode: OverlayMode,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub enum OverlayMode {
+    OpenVr,
+    OpenXr,
+    Debug,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

@@ -1,7 +1,10 @@
 use std::net::ToSocketAddrs;
 
 use crate::{
-    calibration::{EyeShape, FaceShape, Weights}, config::Config, output::{BabbleEmitter, EtvrEmitter, VrchatEmitter, OscTransport, TransportError},
+    calibration::{EyeShape, FaceShape},
+    config::Config,
+    output::{BabbleEmitter, EtvrEmitter, VrchatEmitter, OscTransport, TransportError},
+    weights::Weights,
 };
 
 pub struct Output {
@@ -52,7 +55,7 @@ impl Output {
         Ok(())
     }
 
-    pub fn send_face(&mut self, weights: Weights<'_, FaceShape>) {
+    pub fn send_face(&mut self, weights: &Weights<FaceShape>) {
         let Some(transport) = &mut self.transport else {
             return;
         };
@@ -60,7 +63,7 @@ impl Output {
         self.babble.process_face(weights, transport);
     }
 
-    pub fn send_eyes(&mut self, weights: Weights<'_, EyeShape>) {
+    pub fn send_eyes(&mut self, weights: &Weights<EyeShape>) {
         let Some(transport) = &mut self.transport else {
             return;
         };

@@ -6,6 +6,7 @@ use ort::{
     inputs,
     session::{Session, builder::SessionBuilder},
 };
+use serde_json;
 
 pub struct FaceInference {
     session: Session,
@@ -69,6 +70,7 @@ pub struct EyeInference {
     input_name: String,
     pub input_tensor: ort::value::Tensor<f32>,
     output: Vec<f32>,
+    pub output_names: Option<Vec<String>>,
 }
 
 impl EyeInference {
@@ -97,12 +99,25 @@ impl EyeInference {
         )))
         .map_err(|e| PipelineError::Load(e.to_string()))?;
 
+        let output_dim = session.outputs()[0]
+            .dtype()
+            .tensor_shape()
+            .and_then(|s| s.get(1).copied())
+            .unwrap_or(6) as usize;
+
+        let output_names = parse_blendshape_names(&session);
+
         Ok(Self {
             session,
             input_name,
             input_tensor,
-            output: vec![0.; 6],
+            output: vec![0.; output_dim],
+            output_names,
         })
+    }
+
+    pub fn output_count(&self) -> usize {
+        self.output.len()
     }
 
     pub fn run(&mut self) -> Result<&[f32], PipelineError> {
@@ -119,6 +134,12 @@ impl EyeInference {
 
         Ok(&self.output)
     }
+}
+
+fn parse_blendshape_names(session: &Session) -> Option<Vec<String>> {
+    let metadata = session.metadata().ok()?;
+    let json = metadata.custom("blendshape_names")?;
+    serde_json::from_str(&json).ok()
 }
 
 fn builder() -> Result<SessionBuilder, ort::Error> {

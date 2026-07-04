@@ -1,0 +1,7 @@
+# Tooling for converting the Babble PyTorch checkpoints to burn safetensors.
+# Install into a virtualenv:
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r tools/requirements.txt --index-url https://download.pytorch.org/whl/cpu
+torch
+safetensors
+numpy

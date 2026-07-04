@@ -238,7 +238,7 @@ fn has_same_specs(candidates: &[V4lSource], source: &V4lSource) -> bool {
 /// Queries the system for available cameras and their top format candidates.
 ///
 /// Returns a list of [`CameraInfo`] entries. Each physical camera may appear
-/// multiple times — once per curated format (e.g. highest resolution MJPEG,
+/// multiple times - once per curated format (e.g. highest resolution MJPEG,
 /// highest framerate raw, etc.).
 ///
 /// This will only work on Linux.

@@ -1,5 +1,5 @@
 use crate::{
-    calibration::{EyeCalibrator, EyeShape, Weights},
+    calibration::{EyeCalibrator, EyeShape},
     capture::{
         CameraError, Frame, StereoCamera,
         discovery::{CameraInfo, CameraSource},
@@ -8,6 +8,7 @@ use crate::{
     config::Config,
     pipeline::EyePipeline,
     track::TrackerError,
+    weights::Weights,
 };
 
 pub struct EyeReport<'a> {
@@ -15,7 +16,7 @@ pub struct EyeReport<'a> {
     pub left_processed_frame: &'a Frame,
     pub right_raw_frame: &'a Frame,
     pub right_processed_frame: &'a Frame,
-    pub weights: Weights<'a, EyeShape>,
+    pub weights: &'a Weights<EyeShape>,
 }
 
 pub struct EyeTracker {
@@ -142,12 +143,18 @@ impl EyeTracker {
                 return Ok(false);
             };
 
-            let camera = if left == right {
+            let sbs = left == right;
+            tracing::debug!(sbs, ?left, ?right, "Opening eye tracker camera");
+
+            let camera = if sbs {
                 StereoCamera::open_sbs(left)
             } else {
                 StereoCamera::open(left, right)
             }
-            .map_err(|e| TrackerError::Open(e.to_string()))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, sbs, "Failed to open eye tracker camera");
+                TrackerError::Open(e.to_string())
+            })?;
 
             self.camera = Some(camera);
         }
